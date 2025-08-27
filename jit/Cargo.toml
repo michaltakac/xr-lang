@@ -1,0 +1,23 @@
+[package]
+name = "jit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+cranelift-codegen.workspace = true
+cranelift-frontend.workspace = true
+cranelift-module.workspace = true
+cranelift-jit = { workspace = true, optional = true }
+cranelift-object.workspace = true
+object.workspace = true
+region.workspace = true
+ir = { path = "../ir" }
+vm = { path = "../vm" }
+
+[features]
+default = ["jit-simple"]
+jit-simple = ["cranelift-jit"]

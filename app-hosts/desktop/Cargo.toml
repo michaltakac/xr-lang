@@ -1,0 +1,28 @@
+[package]
+name = "desktop"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "xr-dsl-desktop"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+log.workspace = true
+env_logger.workspace = true
+notify.workspace = true
+winit = { workspace = true }
+wgpu.workspace = true
+bytemuck.workspace = true
+pollster = "0.3"
+dsl = { path = "../../dsl" }
+ir = { path = "../../ir" }
+jit = { path = "../../jit" }
+vm = { path = "../../vm" }
+gpu = { path = "../../gpu" }
+ai = { path = "../../ai" }

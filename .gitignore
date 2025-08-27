@@ -1,0 +1,125 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Debug builds
+debug/
+target/
+
+# Release builds  
+release/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# WebGPU/GPU debugging
+*.spv
+*.spirv
+
+# Test artifacts
+/test-results/
+/coverage/
+
+# Documentation build
+/book/
+/docs/build/
+
+# Local configuration
+.env
+.env.local
+.env.production
+.env.test
+
+# Package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Backup files
+*.bak
+*.backup
+
+# Compiled shaders (if any)
+*.hlsl.compiled
+*.glsl.compiled
+
+# Platform specific
+[Tt]humbs.db
+*.stackdump
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# CTags
+tags
+TAGS
+
+# Hot-reload test files (optional - comment out if you want to track example changes)
+# /examples/*.xrdsl.backup
+
+# Build system
+.ninja_deps
+.ninja_log
+build/
+
+# Profiling
+perf.data*
+*.prof
+flamegraph.svg

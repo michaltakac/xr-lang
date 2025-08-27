@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XR-DSL WebGPU Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            margin: 10px 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .canvas-container {
+            flex: 1;
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        .controls {
+            width: 300px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        canvas {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.1);
+            background: #000;
+        }
+        
+        .dsl-editor {
+            margin-top: 20px;
+        }
+        
+        .dsl-editor h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #ffd700;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: white;
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #ffd700;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        }
+        
+        button {
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            color: #1e3c72;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
+        }
+        
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            border-left: 4px solid #ffd700;
+        }
+        
+        .info h4 {
+            margin-top: 0;
+            color: #ffd700;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .status.success {
+            background: rgba(40, 167, 69, 0.2);
+            border: 1px solid #28a745;
+            color: #28a745;
+        }
+        
+        .status.error {
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #dc3545;
+        }
+        
+        .examples {
+            margin-top: 20px;
+        }
+        
+        .examples h4 {
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+        
+        .example-button {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 8px 12px;
+            margin: 5px;
+            border-radius: 5px;
+            font-size: 12px;
+            display: inline-block;
+        }
+        
+        .example-button:hover {
+            background: rgba(255,255,255,0.2);
+            transform: none;
+            box-shadow: none;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .controls {
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 XR-DSL WebGPU Demo</h1>
+        <p>Interactive 3D rendering with a homoiconic domain-specific language</p>
+    </div>
+
+    <div class="container">
+        <div class="canvas-container">
+            <canvas id="webgpu-canvas" width="800" height="500"></canvas>
+            <div id="status" class="status">Initializing WebGPU...</div>
+        </div>
+
+        <div class="controls">
+            <div class="dsl-editor">
+                <h3>DSL Code Editor</h3>
+                <textarea id="dsl-code" placeholder="Write your XR-DSL code here...">
+; Simple spinning cube scene
+(defbehavior spin
+  (state (speed 2.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d demo
+  (object cube1 cube
+    (position 0 0 0)
+    (behavior spin)))</textarea>
+                <button onclick="loadDSL()">🔄 Load DSL Scene</button>
+            </div>
+
+            <div class="examples">
+                <h4>Examples:</h4>
+                <button class="example-button" onclick="loadExample('simple')">Simple Cube</button>
+                <button class="example-button" onclick="loadExample('spinning')">Spinning Cubes</button>
+                <button class="example-button" onclick="loadExample('complex')">Complex Scene</button>
+            </div>
+
+            <div class="info">
+                <h4>Features</h4>
+                <ul>
+                    <li>Real-time WebGPU rendering</li>
+                    <li>Lisp-style DSL with hot-reload</li>
+                    <li>3D transforms and animations</li>
+                    <li>Cross-platform (Web/Desktop/XR)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { WebRenderer } from './pkg/web.js';
+
+        let renderer;
+        let animationId;
+        let lastTime = 0;
+
+        const examples = {
+            simple: `; Simple spinning cube
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d simple
+  (object cube1 cube
+    (position 0 0 0)
+    (behavior spin)))`,
+
+            spinning: `; Multiple spinning cubes
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d demo
+  (object cube1 cube
+    (position -3 0 0)
+    (behavior spin))
+  (object cube2 cube
+    (position 0 0 0)
+    (scale 1.5 1.5 1.5)
+    (behavior spin))
+  (object cube3 cube
+    (position 3 0 0)
+    (scale 0.8 0.8 0.8)
+    (behavior spin))
+  (object ground plane
+    (position 0 -2 0)
+    (scale 10 1 10)))`,
+
+            complex: `; Complex animated scene
+(defbehavior float-spin
+  (state (t 0.0) (speed 2.0))
+  (update (dt)
+    (set! t (+ t dt))
+    (set! rotation.y (* t speed))
+    (set! position.y (+ 1.0 (* 0.5 (sin t))))))
+
+(defbehavior pulse
+  (state (t 0.0))
+  (update (dt)
+    (set! t (+ t dt))
+    (let ((s (+ 1.0 (* 0.3 (sin (* t 3.0))))))
+      (set-scale s s s))))
+
+(defscene3d complex
+  (camera
+    (position 0 8 15)
+    (target 0 0 0))
+  (object floater cube
+    (position -2 0 0)
+    (behavior float-spin))
+  (object pulser cube
+    (position 2 0 0)
+    (behavior pulse))
+  (object ground plane
+    (position 0 -3 0)
+    (scale 15 1 15)))`
+        };
+
+        window.loadExample = function(name) {
+            const textarea = document.getElementById('dsl-code');
+            textarea.value = examples[name] || examples.simple;
+        };
+
+        window.loadDSL = function() {
+            const code = document.getElementById('dsl-code').value;
+            const status = document.getElementById('status');
+            
+            try {
+                renderer.load_dsl(code);
+                status.className = 'status success';
+                status.textContent = '✅ DSL loaded successfully!';
+            } catch (error) {
+                status.className = 'status error';
+                status.textContent = `❌ Error: ${error}`;
+            }
+        };
+
+        function animate(currentTime) {
+            const dt = Math.min((currentTime - lastTime) / 1000.0, 0.1);
+            lastTime = currentTime;
+
+            try {
+                renderer.render(dt);
+            } catch (error) {
+                console.error('Render error:', error);
+            }
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        async function main() {
+            try {
+                await init();
+                
+                const canvas = document.getElementById('webgpu-canvas');
+                const status = document.getElementById('status');
+                
+                renderer = new WebRenderer();
+                await renderer.init(canvas);
+                
+                status.className = 'status success';
+                status.textContent = '🎉 WebGPU initialized successfully! Rendering 3D scene...';
+                
+                // Handle canvas resize
+                const resizeObserver = new ResizeObserver(entries => {
+                    for (let entry of entries) {
+                        const { width, height } = entry.contentRect;
+                        canvas.width = width;
+                        canvas.height = height;
+                        renderer.resize(width, height);
+                    }
+                });
+                resizeObserver.observe(canvas);
+                
+                // Load default example
+                loadExample('spinning');
+                
+                // Start render loop
+                animationId = requestAnimationFrame(animate);
+                
+            } catch (error) {
+                const status = document.getElementById('status');
+                status.className = 'status error';
+                status.textContent = `❌ Failed to initialize: ${error}`;
+                console.error('Initialization error:', error);
+            }
+        }
+
+        // Handle page visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+            } else if (!animationId && renderer) {
+                lastTime = performance.now();
+                animationId = requestAnimationFrame(animate);
+            }
+        });
+
+        main();
+    </script>
+</body>
+</html>

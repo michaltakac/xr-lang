@@ -1,0 +1,17 @@
+[package]
+name = "gpu"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+bytemuck.workspace = true
+twox-hash.workspace = true
+hecs.workspace = true
+log.workspace = true
+vm = { path = "../vm" }
