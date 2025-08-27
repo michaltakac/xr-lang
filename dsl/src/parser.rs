@@ -344,26 +344,140 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
     })
 }
 
-fn parse_camera(_parts: &[Expr]) -> anyhow::Result<CameraDef> {
+fn parse_camera(parts: &[Expr]) -> anyhow::Result<CameraDef> {
+    let mut position = [0.0, 5.0, 10.0];
+    let mut target = [0.0, 0.0, 0.0];
+    let mut up = [0.0, 1.0, 0.0];
+    let mut fov = 45.0; // Default FOV in degrees
+    let mut near = 0.1;
+    let mut far = 100.0;
+    
+    // Parse camera properties
+    for part in parts {
+        if let Expr::List(ref list) = part {
+            if list.is_empty() { continue; }
+            
+            if let Some(prop_name) = list[0].as_symbol() {
+                match prop_name {
+                    "position" => {
+                        if list.len() == 4 {
+                            position = parse_vec3(&list[1..])?;
+                        }
+                    }
+                    "target" => {
+                        if list.len() == 4 {
+                            target = parse_vec3(&list[1..])?;
+                        }
+                    }
+                    "up" => {
+                        if list.len() == 4 {
+                            up = parse_vec3(&list[1..])?;
+                        }
+                    }
+                    "fov" => {
+                        if list.len() == 2 {
+                            fov = parse_float(&list[1])?;
+                        }
+                    }
+                    "near" => {
+                        if list.len() == 2 {
+                            near = parse_float(&list[1])?;
+                        }
+                    }
+                    "far" => {
+                        if list.len() == 2 {
+                            far = parse_float(&list[1])?;
+                        }
+                    }
+                    _ => {} // Ignore unknown properties
+                }
+            }
+        }
+    }
+    
     Ok(CameraDef {
-        position: [0.0, 5.0, 10.0],
-        target: [0.0, 0.0, 0.0],
-        up: [0.0, 1.0, 0.0],
-        fov: std::f32::consts::FRAC_PI_4,
-        near: 0.1,
-        far: 100.0,
+        position,
+        target,
+        up,
+        fov: fov * std::f32::consts::PI / 180.0, // Convert degrees to radians
+        near,
+        far,
     })
 }
 
-fn parse_lighting(_parts: &[Expr]) -> anyhow::Result<LightingDef> {
+fn parse_lighting(parts: &[Expr]) -> anyhow::Result<LightingDef> {
+    let mut ambient = [0.3, 0.3, 0.3];
+    let mut directional = None;
+    
+    // Parse lighting properties
+    for part in parts {
+        if let Expr::List(ref list) = part {
+            if list.is_empty() { continue; }
+            
+            if let Some(prop_name) = list[0].as_symbol() {
+                match prop_name {
+                    "ambient" => {
+                        if list.len() == 4 {
+                            ambient = parse_vec3(&list[1..])?;
+                        }
+                    }
+                    "directional" => {
+                        // Parse directional light properties
+                        let mut direction = [1.0, 1.0, 1.0];
+                        let mut color = [1.0, 1.0, 1.0];
+                        let mut intensity = 1.0;
+                        
+                        for dir_part in &list[1..] {
+                            if let Expr::List(ref dir_list) = dir_part {
+                                if dir_list.is_empty() { continue; }
+                                
+                                if let Some(dir_prop) = dir_list[0].as_symbol() {
+                                    match dir_prop {
+                                        "direction" => {
+                                            if dir_list.len() == 4 {
+                                                direction = parse_vec3(&dir_list[1..])?;
+                                            }
+                                        }
+                                        "color" => {
+                                            if dir_list.len() == 4 {
+                                                color = parse_vec3(&dir_list[1..])?;
+                                            }
+                                        }
+                                        "intensity" => {
+                                            if dir_list.len() == 2 {
+                                                intensity = parse_float(&dir_list[1])?;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                        
+                        directional = Some(DirectionalLight {
+                            direction,
+                            color,
+                            intensity,
+                        });
+                    }
+                    _ => {} // Ignore unknown properties
+                }
+            }
+        }
+    }
+    
     Ok(LightingDef {
-        ambient: [0.3, 0.3, 0.3],
-        directional: Some(DirectionalLight {
-            direction: [1.0, 1.0, 1.0],
-            color: [1.0, 1.0, 1.0],
-            intensity: 1.0,
-        }),
+        ambient,
+        directional,
     })
+}
+
+fn parse_float(expr: &Expr) -> anyhow::Result<f32> {
+    match expr {
+        Expr::F32(f) => Ok(*f),
+        Expr::I32(i) => Ok(*i as f32),
+        _ => anyhow::bail!("Expected a number, got {:?}", expr),
+    }
 }
 
 fn parse_vec3(parts: &[Expr]) -> anyhow::Result<[f32; 3]> {

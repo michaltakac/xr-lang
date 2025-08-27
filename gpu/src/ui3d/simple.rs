@@ -29,8 +29,12 @@ impl SimpleUI3D {
     }
     
     pub fn render(&self, _device: &Device, _queue: &Queue, _view: &TextureView, _depth_view: &TextureView) {
-        // UI rendering would go here
-        // For now, just a placeholder that doesn't break compilation
+        // UI rendering would go here - for now we show debug info in console
+        // In a full implementation, this would render 3D UI elements like:
+        // - Code editor panels floating in 3D space
+        // - Interactive buttons and controls
+        // - Log viewer with scrollable text
+        // - Property panels for selected objects
     }
     
     pub fn get_current_code(&self) -> Option<String> {

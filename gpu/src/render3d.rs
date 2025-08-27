@@ -159,6 +159,7 @@ pub struct Renderer3D {
     pub time: f32,
     pub ui_system: UI3DSystem,
     pub scene_data: SceneData,
+    pub aspect_ratio: f32,
 }
 
 impl Renderer3D {
@@ -266,6 +267,7 @@ impl Renderer3D {
             time: 0.0,
             ui_system: UI3DSystem::new(device, config),
             scene_data: SceneData::default(),
+            aspect_ratio: config.width as f32 / config.height as f32,
         };
         
         // Initialize scene from default data
@@ -300,6 +302,25 @@ impl Renderer3D {
             self.meshes.push(mesh);
         }
         
+        // Apply camera from scene data if available
+        if let Some(ref camera_data) = self.scene_data.camera {
+            // Update camera with DSL settings
+            self.camera = Camera::perspective(
+                camera_data.position,
+                camera_data.target,
+                Vec3::Y,
+                camera_data.fov, // FOV already in radians from DSL parsing
+                self.aspect_ratio,
+                0.1,
+                100.0,
+            );
+            
+            println!("📹 Applied DSL Camera: pos({:.1}, {:.1}, {:.1}), target({:.1}, {:.1}, {:.1}), fov: {:.1}°", 
+                camera_data.position.x, camera_data.position.y, camera_data.position.z,
+                camera_data.target.x, camera_data.target.y, camera_data.target.z,
+                camera_data.fov * 180.0 / std::f32::consts::PI);
+        }
+        
         // Log behavior information for debugging
         println!("✅ Rebuilt scene with {} meshes", self.meshes.len());
         for (name, behavior) in &self.scene_data.behaviors {
@@ -307,27 +328,26 @@ impl Renderer3D {
                 println!("🎯 Behavior '{}': speed = {}", name, speed);
             }
         }
-        
-        if let Some(ref camera) = self.scene_data.camera {
-            println!("📹 Camera: pos({:.1}, {:.1}, {:.1}), target({:.1}, {:.1}, {:.1}), fov: {:.1}°", 
-                camera.position.x, camera.position.y, camera.position.z,
-                camera.target.x, camera.target.y, camera.target.z,
-                camera.fov * 180.0 / std::f32::consts::PI);
-        }
     }
     
     
     pub fn update(&mut self, dt: f32, device: &Device) {
         self.time += dt;
         
-        // Update orbital camera animation
-        let radius = 10.0;
-        let speed = 0.5;
-        let x = (self.time * speed).cos() * radius;
-        let z = (self.time * speed).sin() * radius;
-        let y = 5.0;
-        
-        self.camera.update(Vec3::new(x, y, z), Vec3::ZERO, Vec3::Y);
+        // Update camera based on scene data or use orbital fallback
+        if let Some(ref camera_data) = self.scene_data.camera {
+            // Use DSL camera settings
+            self.camera.update(camera_data.position, camera_data.target, Vec3::Y);
+        } else {
+            // Fallback to orbital camera animation
+            let radius = 10.0;
+            let speed = 0.5;
+            let x = (self.time * speed).cos() * radius;
+            let z = (self.time * speed).sin() * radius;
+            let y = 5.0;
+            
+            self.camera.update(Vec3::new(x, y, z), Vec3::ZERO, Vec3::Y);
+        }
         
         // Update mesh rotations based on scene data and behaviors
         for (i, mesh) in self.meshes.iter_mut().enumerate() {
