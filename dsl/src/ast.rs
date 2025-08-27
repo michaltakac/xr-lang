@@ -36,6 +36,7 @@ pub enum Top {
 pub struct Scene3D {
     pub name: String,
     pub objects: Vec<Object3D>,
+    pub ui_elements: Vec<UIElement>,
     pub camera: Option<CameraDef>,
     pub lighting: Option<LightingDef>,
 }
@@ -85,6 +86,17 @@ pub struct MaterialDef {
     pub metallic: f32,
     pub roughness: f32,
     pub emissive: [f32; 3],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UIElement {
+    pub name: String,
+    pub ui_type: String, // "panel", "text", "button"
+    pub position: [f32; 3],
+    pub size: [f32; 2],
+    pub text: Option<String>,
+    pub color: [f32; 4],
+    pub behavior: Option<String>,
 }
 
 impl Expr {

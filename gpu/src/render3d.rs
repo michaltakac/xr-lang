@@ -163,7 +163,7 @@ pub struct Renderer3D {
 }
 
 impl Renderer3D {
-    pub fn new(device: &Device, config: &SurfaceConfiguration) -> Self {
+    pub fn new(device: &Device, queue: &Queue, config: &SurfaceConfiguration) -> Self {
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("3D Shader"),
             source: ShaderSource::Wgsl(include_str!("../../examples/basic_3d.wgsl").into()),
@@ -265,7 +265,7 @@ impl Renderer3D {
             camera,
             meshes: Vec::new(),
             time: 0.0,
-            ui_system: UI3DSystem::new(device, config),
+            ui_system: UI3DSystem::new(device, queue, config),
             scene_data: SceneData::default(),
             aspect_ratio: config.width as f32 / config.height as f32,
         };
@@ -280,10 +280,16 @@ impl Renderer3D {
     }
     
     pub fn load_scene(&mut self, scene_data: SceneData, device: &Device) {
-        println!("🔄 Loading new scene with {} cubes", scene_data.cubes.len());
+        println!("🔄 Loading new scene with {} cubes, {} UI elements", 
+            scene_data.cubes.len(), scene_data.ui_elements.len());
         self.scene_data = scene_data;
         self.rebuild_scene(device);
-        self.ui_system.add_log_entry(&format!("Scene reloaded with {} objects", self.scene_data.cubes.len()));
+        
+        // Update UI elements
+        self.ui_system.update_ui_elements(self.scene_data.ui_elements.clone());
+        
+        self.ui_system.add_log_entry(&format!("Scene reloaded with {} objects and {} UI elements", 
+            self.scene_data.cubes.len(), self.scene_data.ui_elements.len()));
     }
     
     fn rebuild_scene(&mut self, device: &Device) {

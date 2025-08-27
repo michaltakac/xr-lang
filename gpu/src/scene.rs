@@ -6,6 +6,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct SceneData {
     pub cubes: Vec<CubeData>,
+    pub ui_elements: Vec<UIElementData>,
     pub behaviors: HashMap<String, BehaviorData>,
     pub camera: Option<CameraData>,
     pub lighting: Option<LightingData>,
@@ -41,6 +42,17 @@ pub struct LightingData {
     pub directional_intensity: f32,
 }
 
+#[derive(Debug, Clone)]
+pub struct UIElementData {
+    pub name: String,
+    pub ui_type: String,
+    pub position: Vec3,
+    pub size: Vec2,
+    pub text: Option<String>,
+    pub color: Vec4,
+    pub behavior: Option<String>,
+}
+
 impl Default for SceneData {
     fn default() -> Self {
         let mut behaviors = HashMap::new();
@@ -68,6 +80,7 @@ impl Default for SceneData {
                     behavior: Some("spin".to_string()),
                 },
             ],
+            ui_elements: vec![],
             behaviors,
             camera: None,
             lighting: None,

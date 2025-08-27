@@ -14,4 +14,5 @@ bytemuck.workspace = true
 twox-hash.workspace = true
 hecs.workspace = true
 log.workspace = true
+rusttype.workspace = true
 vm = { path = "../vm" }

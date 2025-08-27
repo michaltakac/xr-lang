@@ -29,19 +29,26 @@ async fn main() -> Result<()> {
     println!("✅ GPU context initialized!");
     
     // Create 3D renderer
-    let mut renderer_3d = gpu::Renderer3D::new(&gpu_ctx.device, &gpu_ctx.config);
+    let mut renderer_3d = gpu::Renderer3D::new(&gpu_ctx.device, &gpu_ctx.queue, &gpu_ctx.config);
     println!("✅ 3D renderer created!");
     
     // Set up hot-reload system
-    let examples_path = std::path::Path::new("examples");
+    let examples_path = if std::path::Path::new("examples").exists() {
+        std::path::Path::new("examples")
+    } else if std::path::Path::new("../../examples").exists() {
+        std::path::Path::new("../../examples")
+    } else {
+        println!("⚠️ Examples directory not found, hot-reload disabled");
+        std::path::Path::new(".")
+    };
     let mut hot_reloader = HotReloader::new(&examples_path)?;
     let mut scene_loader = SceneLoader::new();
     
     // Try to load the spinning cubes example initially
-    let spinning_cubes_path = "examples/spinning_cubes.xrdsl";
-    if let Ok(Some(scene_data)) = scene_loader.load_scene_from_file(spinning_cubes_path) {
+    let spinning_cubes_path = examples_path.join("spinning_cubes.xrdsl");
+    if let Ok(Some(scene_data)) = scene_loader.load_scene_from_file(spinning_cubes_path.to_str().unwrap()) {
         renderer_3d.load_scene(scene_data, &gpu_ctx.device);
-        println!("✅ Loaded initial scene from: {}", spinning_cubes_path);
+        println!("✅ Loaded initial scene from: {}", spinning_cubes_path.display());
     } else {
         println!("⚠️  Could not load spinning_cubes.xrdsl, using default scene");
     }

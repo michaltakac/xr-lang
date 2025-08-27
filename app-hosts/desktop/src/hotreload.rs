@@ -122,6 +122,7 @@ impl SceneLoader {
                         // Since parsing worked but no Scene3D found, create default scene
                         let fallback_scene = gpu::SceneData {
                             cubes: self.parse_cubes_from_raw_scene(),
+                            ui_elements: vec![],
                             behaviors: self.extract_behaviors_from_ast(&ast),
                             camera: None,
                             lighting: None,
@@ -134,6 +135,7 @@ impl SceneLoader {
                         
                         let fallback_scene = gpu::SceneData {
                             cubes: self.parse_cubes_from_raw_scene(),
+                            ui_elements: vec![],
                             behaviors: self.extract_behaviors_from_ast(&ast),
                             camera: None,
                             lighting: None,
@@ -168,6 +170,7 @@ impl SceneLoader {
                 println!("🔧 Creating fallback scene due to parse error");
                 let fallback_scene = gpu::SceneData {
                     cubes: self.parse_cubes_from_raw_scene(),
+                    ui_elements: vec![],
                     behaviors: std::collections::HashMap::new(),
                     camera: None,
                     lighting: None,
@@ -231,8 +234,10 @@ impl SceneLoader {
     
     fn convert_scene_to_data_with_validation(&self, scene: &dsl::ast::Scene3D, behaviors: &std::collections::HashMap<String, gpu::BehaviorData>) -> Result<gpu::SceneData> {
         let mut cubes = Vec::new();
+        let mut ui_elements = Vec::new();
         
-        println!("🔧 Converting {} objects to scene data", scene.objects.len());
+        println!("🔧 Converting {} objects and {} UI elements to scene data", 
+            scene.objects.len(), scene.ui_elements.len());
         
         // Extract cube objects from scene
         for object in &scene.objects {
@@ -291,16 +296,40 @@ impl SceneLoader {
             }
         });
         
+        // Parse UI elements
+        for ui in &scene.ui_elements {
+            println!("  📱 UI Element: '{}' ({})", ui.name, ui.ui_type);
+            
+            let ui_data = gpu::UIElementData {
+                name: ui.name.clone(),
+                ui_type: ui.ui_type.clone(),
+                position: gpu::Vec3::from(ui.position),
+                size: ui.size,
+                text: ui.text.clone(),
+                color: ui.color,
+                behavior: ui.behavior.clone(),
+            };
+            
+            if let Some(ref text) = ui.text {
+                println!("    📝 Text: '{}'", text);
+            }
+            println!("    📍 Position: ({:.1}, {:.1}, {:.1})", ui.position[0], ui.position[1], ui.position[2]);
+            
+            ui_elements.push(ui_data);
+        }
+        
         // If no cubes found, fall back to text parsing
         if cubes.is_empty() {
             println!("⚠️ No cubes found in Scene3D, falling back to text parsing");
             cubes = self.parse_cubes_from_raw_scene();
         }
         
-        println!("✅ Scene conversion complete: {} cubes, {} behaviors", cubes.len(), behaviors.len());
+        println!("✅ Scene conversion complete: {} cubes, {} UI elements, {} behaviors", 
+            cubes.len(), ui_elements.len(), behaviors.len());
         
         Ok(gpu::SceneData { 
             cubes,
+            ui_elements,
             behaviors: behaviors.clone(),
             camera,
             lighting,
@@ -377,6 +406,7 @@ impl SceneLoader {
         
         gpu::SceneData { 
             cubes,
+            ui_elements: vec![],
             behaviors: behaviors.clone(),
             camera,
             lighting,

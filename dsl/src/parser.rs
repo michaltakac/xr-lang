@@ -256,6 +256,7 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
             };
             
             let mut objects = vec![];
+            let mut ui_elements = vec![];
             let mut camera = None;
             let mut lighting = None;
             
@@ -271,6 +272,9 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
                     "object" => {
                         objects.push(parse_object3d(&parts[1..])?);
                     }
+                    "ui" | "ui-element" => {
+                        ui_elements.push(parse_ui_element(&parts[1..])?);
+                    }
                     "camera" => {
                         camera = Some(parse_camera(&parts[1..])?);
                     }
@@ -284,6 +288,7 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
             Ok(Top::Scene3D(Scene3D {
                 name,
                 objects,
+                ui_elements,
                 camera,
                 lighting,
             }))
@@ -402,6 +407,92 @@ fn parse_camera(parts: &[Expr]) -> anyhow::Result<CameraDef> {
         fov: fov * std::f32::consts::PI / 180.0, // Convert degrees to radians
         near,
         far,
+    })
+}
+
+fn parse_ui_element(parts: &[Expr]) -> anyhow::Result<UIElement> {
+    if parts.len() < 2 {
+        anyhow::bail!("ui element needs at least name and type");
+    }
+    
+    let name = match &parts[0] {
+        Expr::Sym(s) => s.clone(),
+        _ => anyhow::bail!("ui element name must be symbol"),
+    };
+    
+    let ui_type = match &parts[1] {
+        Expr::Sym(s) => s.clone(),
+        _ => anyhow::bail!("ui element type must be symbol"),
+    };
+    
+    let mut position = [0.0, 0.0, -5.0];
+    let mut size = [2.0, 2.0];
+    let mut text = None;
+    let mut color = [1.0, 1.0, 1.0, 1.0];
+    let mut behavior = None;
+    
+    // Parse properties
+    for part in &parts[2..] {
+        if let Expr::List(ref list) = part {
+            if list.is_empty() { continue; }
+            
+            if let Some(prop_name) = list[0].as_symbol() {
+                match prop_name {
+                    "position" => {
+                        if list.len() == 4 {
+                            position = parse_vec3(&list[1..])?;
+                        }
+                    }
+                    "size" => {
+                        if list.len() == 3 {
+                            let x = parse_float(&list[1])?;
+                            let y = parse_float(&list[2])?;
+                            size = [x, y];
+                        }
+                    }
+                    "text" => {
+                        if list.len() >= 2 {
+                            // Join all text parts
+                            let text_parts: Vec<String> = list[1..].iter()
+                                .filter_map(|e| match e {
+                                    Expr::Sym(s) => Some(s.clone()),
+                                    _ => None,
+                                })
+                                .collect();
+                            text = Some(text_parts.join(" "));
+                        }
+                    }
+                    "color" => {
+                        if list.len() == 5 {
+                            let r = parse_float(&list[1])?;
+                            let g = parse_float(&list[2])?;
+                            let b = parse_float(&list[3])?;
+                            let a = parse_float(&list[4])?;
+                            color = [r, g, b, a];
+                        }
+                    }
+                    "behavior" => {
+                        if list.len() == 2 {
+                            behavior = Some(match &list[1] {
+                                Expr::Sym(s) => s.clone(),
+                                _ => anyhow::bail!("behavior must be symbol"),
+                            });
+                        }
+                    }
+                    _ => {} // Ignore unknown properties
+                }
+            }
+        }
+    }
+    
+    Ok(UIElement {
+        name,
+        ui_type,
+        position,
+        size,
+        text,
+        color,
+        behavior,
     })
 }
 

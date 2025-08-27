@@ -1,11 +1,11 @@
 //! 3D UI system for immersive development environment
 
 pub mod simple;
-pub use simple::*;
+pub mod text_renderer;
+pub mod debug_atlas;
+pub mod sdf_generator;
 
-// Full ECS implementation (disabled for compilation issues)
-// pub mod component;
-// pub mod text_renderer;  
+pub use simple::*;  
 // pub mod input;
 // pub mod editor;
 // pub mod ecs;

@@ -38,8 +38,24 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let alpha = textureSample(font_texture, font_sampler, input.uv).r;
+    // Sample the SDF texture
+    let distance = textureSample(font_texture, font_sampler, input.uv).r;
     
-    // Apply text color with font alpha
+    // SDF rendering with smoothstep for anti-aliasing
+    // 0.5 is the edge of the glyph in SDF space
+    // Adjust the smoothstep range for sharper or softer edges
+    let width = 0.7;  // Controls edge softness
+    let edge = 0.5;   // The actual edge position in SDF
+    
+    // Calculate screen-space derivatives for adaptive anti-aliasing
+    let dfdx = dpdx(distance);
+    let dfdy = dpdy(distance);
+    let grad_len = length(vec2<f32>(dfdx, dfdy));
+    let pixel_dist = grad_len * width;
+    
+    // Use smoothstep for anti-aliased edge
+    let alpha = smoothstep(edge - pixel_dist, edge + pixel_dist, distance);
+    
+    // Apply text color with calculated alpha
     return vec4<f32>(input.color.rgb, input.color.a * alpha);
 }
