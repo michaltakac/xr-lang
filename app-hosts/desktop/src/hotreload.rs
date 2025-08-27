@@ -126,6 +126,7 @@ impl SceneLoader {
                             behaviors: self.extract_behaviors_from_ast(&ast),
                             camera: None,
                             lighting: None,
+                            input: None,
                         };
                         return Ok(Some(fallback_scene));
                     }
@@ -139,6 +140,7 @@ impl SceneLoader {
                             behaviors: self.extract_behaviors_from_ast(&ast),
                             camera: None,
                             lighting: None,
+                            input: None,
                         };
                         return Ok(Some(fallback_scene));
                     }
@@ -174,6 +176,7 @@ impl SceneLoader {
                     behaviors: std::collections::HashMap::new(),
                     camera: None,
                     lighting: None,
+                    input: None,
                 };
                 return Ok(Some(fallback_scene));
             }
@@ -324,6 +327,32 @@ impl SceneLoader {
             cubes = self.parse_cubes_from_raw_scene();
         }
         
+        // Convert input configuration
+        let input = scene.input.as_ref().map(|input_def| {
+            gpu::InputData {
+                camera_controls: input_def.camera_controls.as_ref().map(|controls| {
+                    gpu::CameraControlsData {
+                        move_speed: controls.move_speed,
+                        rotate_speed: controls.rotate_speed,
+                        movement_keys: gpu::MovementKeysData {
+                            forward: controls.movement_keys.forward.clone(),
+                            backward: controls.movement_keys.backward.clone(),
+                            left: controls.movement_keys.left.clone(),
+                            right: controls.movement_keys.right.clone(),
+                            up: controls.movement_keys.up.clone(),
+                            down: controls.movement_keys.down.clone(),
+                        },
+                        rotation_keys: gpu::RotationKeysData {
+                            pitch_up: controls.rotation_keys.pitch_up.clone(),
+                            pitch_down: controls.rotation_keys.pitch_down.clone(),
+                            yaw_left: controls.rotation_keys.yaw_left.clone(),
+                            yaw_right: controls.rotation_keys.yaw_right.clone(),
+                        },
+                    }
+                }),
+            }
+        });
+        
         println!("✅ Scene conversion complete: {} cubes, {} UI elements, {} behaviors", 
             cubes.len(), ui_elements.len(), behaviors.len());
         
@@ -333,6 +362,7 @@ impl SceneLoader {
             behaviors: behaviors.clone(),
             camera,
             lighting,
+            input,
         })
     }
 
@@ -410,6 +440,7 @@ impl SceneLoader {
             behaviors: behaviors.clone(),
             camera,
             lighting,
+            input: None,
         }
     }
     

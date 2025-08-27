@@ -5,9 +5,10 @@ mod hotreload;
 use anyhow::Result;
 use std::time::Instant;
 use winit::{
-    event::{Event, WindowEvent},
+    event::{Event, WindowEvent, KeyEvent, ElementState},
     event_loop::EventLoop,
     window::{Window},
+    keyboard::{KeyCode, PhysicalKey},
 };
 use hotreload::{HotReloader, SceneLoader};
 
@@ -75,6 +76,12 @@ async fn main() -> Result<()> {
                 event: WindowEvent::CloseRequested,
                 ..
             } => target.exit(),
+            Event::WindowEvent {
+                event: WindowEvent::KeyboardInput { event, .. },
+                ..
+            } => {
+                renderer_3d.handle_keyboard_input(&event, &gpu_ctx.device);
+            }
             Event::WindowEvent {
                 event: WindowEvent::RedrawRequested,
                 ..

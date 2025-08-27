@@ -10,6 +10,7 @@ pub struct SceneData {
     pub behaviors: HashMap<String, BehaviorData>,
     pub camera: Option<CameraData>,
     pub lighting: Option<LightingData>,
+    pub input: Option<InputData>,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +54,37 @@ pub struct UIElementData {
     pub behavior: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct InputData {
+    pub camera_controls: Option<CameraControlsData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CameraControlsData {
+    pub move_speed: f32,
+    pub rotate_speed: f32,
+    pub movement_keys: MovementKeysData,
+    pub rotation_keys: RotationKeysData,
+}
+
+#[derive(Debug, Clone)]
+pub struct MovementKeysData {
+    pub forward: String,
+    pub backward: String,
+    pub left: String,
+    pub right: String,
+    pub up: String,
+    pub down: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RotationKeysData {
+    pub pitch_up: String,
+    pub pitch_down: String,
+    pub yaw_left: String,
+    pub yaw_right: String,
+}
+
 impl Default for SceneData {
     fn default() -> Self {
         let mut behaviors = HashMap::new();
@@ -84,6 +116,7 @@ impl Default for SceneData {
             behaviors,
             camera: None,
             lighting: None,
+            input: None,
         }
     }
 }

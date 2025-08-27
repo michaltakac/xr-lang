@@ -259,6 +259,7 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
             let mut ui_elements = vec![];
             let mut camera = None;
             let mut lighting = None;
+            let mut input = None;
             
             for form in &list[2..] {
                 let Expr::List(parts) = form else {
@@ -281,6 +282,9 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
                     "lighting" => {
                         lighting = Some(parse_lighting(&parts[1..])?);
                     }
+                    "input" => {
+                        input = Some(parse_input(&parts[1..])?);
+                    }
                     _ => anyhow::bail!("unknown scene form: {}", tag),
                 }
             }
@@ -291,6 +295,7 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
                 ui_elements,
                 camera,
                 lighting,
+                input,
             }))
         }
         _ => anyhow::bail!("unknown top-level form: {}", head),
@@ -586,4 +591,155 @@ fn parse_vec3(parts: &[Expr]) -> anyhow::Result<[f32; 3]> {
     }
     
     Ok(result)
+}
+
+fn parse_input(parts: &[Expr]) -> anyhow::Result<InputDef> {
+    let mut camera_controls = None;
+    let mut key_bindings = vec![];
+    
+    for form in parts {
+        let Expr::List(prop) = form else {
+            continue;
+        };
+        
+        if prop.is_empty() {
+            continue;
+        }
+        
+        let Expr::Sym(tag) = &prop[0] else {
+            continue;
+        };
+        
+        match tag.as_str() {
+            "camera-controls" => {
+                camera_controls = Some(parse_camera_controls(&prop[1..])?);
+            }
+            "key" => {
+                key_bindings.push(parse_key_binding(&prop[1..])?);
+            }
+            _ => {} // Ignore unknown properties
+        }
+    }
+    
+    Ok(InputDef {
+        camera_controls,
+        key_bindings,
+    })
+}
+
+fn parse_camera_controls(parts: &[Expr]) -> anyhow::Result<CameraControls> {
+    let mut move_speed = 5.0;
+    let mut rotate_speed = 1.0;
+    let mut movement_keys = MovementKeys {
+        forward: "W".to_string(),
+        backward: "S".to_string(),
+        left: "A".to_string(),
+        right: "D".to_string(),
+        up: "Space".to_string(),
+        down: "Shift".to_string(),
+    };
+    let mut rotation_keys = RotationKeys {
+        pitch_up: "Up".to_string(),
+        pitch_down: "Down".to_string(),
+        yaw_left: "Left".to_string(),
+        yaw_right: "Right".to_string(),
+    };
+    
+    for form in parts {
+        let Expr::List(prop) = form else {
+            continue;
+        };
+        
+        if prop.len() < 2 {
+            continue;
+        }
+        
+        let Expr::Sym(tag) = &prop[0] else {
+            continue;
+        };
+        
+        match tag.as_str() {
+            "move-speed" => {
+                move_speed = parse_float(&prop[1])?;
+            }
+            "rotate-speed" => {
+                rotate_speed = parse_float(&prop[1])?;
+            }
+            "movement" => {
+                for movement_prop in &prop[1..] {
+                    if let Expr::List(mp) = movement_prop {
+                        if mp.len() >= 2 {
+                            if let (Expr::Sym(key), Expr::Sym(value)) = (&mp[0], &mp[1]) {
+                                match key.as_str() {
+                                    "forward" => movement_keys.forward = value.clone(),
+                                    "backward" => movement_keys.backward = value.clone(),
+                                    "left" => movement_keys.left = value.clone(),
+                                    "right" => movement_keys.right = value.clone(),
+                                    "up" => movement_keys.up = value.clone(),
+                                    "down" => movement_keys.down = value.clone(),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "rotation" => {
+                for rotation_prop in &prop[1..] {
+                    if let Expr::List(rp) = rotation_prop {
+                        if rp.len() >= 2 {
+                            if let (Expr::Sym(key), Expr::Sym(value)) = (&rp[0], &rp[1]) {
+                                match key.as_str() {
+                                    "pitch-up" => rotation_keys.pitch_up = value.clone(),
+                                    "pitch-down" => rotation_keys.pitch_down = value.clone(),
+                                    "yaw-left" => rotation_keys.yaw_left = value.clone(),
+                                    "yaw-right" => rotation_keys.yaw_right = value.clone(),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    Ok(CameraControls {
+        move_speed,
+        rotate_speed,
+        movement_keys,
+        rotation_keys,
+    })
+}
+
+fn parse_key_binding(parts: &[Expr]) -> anyhow::Result<KeyBinding> {
+    if parts.len() < 2 {
+        anyhow::bail!("key binding needs key and action");
+    }
+    
+    let key = match &parts[0] {
+        Expr::Sym(s) => s.clone(),
+        _ => anyhow::bail!("key must be a symbol"),
+    };
+    
+    let action = match &parts[1] {
+        Expr::Sym(s) => s.clone(),
+        _ => anyhow::bail!("action must be a symbol"),
+    };
+    
+    let target = if parts.len() > 2 {
+        match &parts[2] {
+            Expr::Sym(s) => Some(s.clone()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    
+    Ok(KeyBinding {
+        key,
+        action,
+        target,
+    })
 }

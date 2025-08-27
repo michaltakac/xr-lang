@@ -155,11 +155,17 @@ pub struct Renderer3D {
     pub uniform_buffer: Buffer,
     pub uniform_bind_group: BindGroup,
     pub camera: Camera,
+    pub camera_target: Vec3,
     pub meshes: Vec<Mesh>,
     pub time: f32,
     pub ui_system: UI3DSystem,
     pub scene_data: SceneData,
     pub aspect_ratio: f32,
+    pub keyboard_state: KeyboardState,
+}
+
+pub struct KeyboardState {
+    pub keys_pressed: std::collections::HashSet<String>,
 }
 
 impl Renderer3D {
@@ -248,9 +254,10 @@ impl Renderer3D {
             multiview: None,
         });
         
+        let camera_target = Vec3::ZERO;
         let camera = Camera::perspective(
             Vec3::new(0.0, 5.0, 10.0),
-            Vec3::ZERO,
+            camera_target,
             Vec3::Y,
             std::f32::consts::FRAC_PI_4,
             config.width as f32 / config.height as f32,
@@ -263,11 +270,15 @@ impl Renderer3D {
             uniform_buffer,
             uniform_bind_group,
             camera,
+            camera_target,
             meshes: Vec::new(),
             time: 0.0,
             ui_system: UI3DSystem::new(device, queue, config),
             scene_data: SceneData::default(),
             aspect_ratio: config.width as f32 / config.height as f32,
+            keyboard_state: KeyboardState {
+                keys_pressed: std::collections::HashSet::new(),
+            },
         };
         
         // Initialize scene from default data
@@ -311,6 +322,7 @@ impl Renderer3D {
         // Apply camera from scene data if available
         if let Some(ref camera_data) = self.scene_data.camera {
             // Update camera with DSL settings
+            self.camera_target = camera_data.target;
             self.camera = Camera::perspective(
                 camera_data.position,
                 camera_data.target,
@@ -377,6 +389,9 @@ impl Renderer3D {
                 mesh.transform.rotation.y = self.time + i as f32;
             }
         }
+        
+        // Update camera based on keyboard input
+        self.update_camera_from_input(dt);
         
         // Update UI system
         self.ui_system.update(dt, &self.camera, device);
@@ -471,5 +486,116 @@ impl Renderer3D {
         
         // Render UI on top
         self.ui_system.render(device, queue, view, depth_view);
+    }
+    
+    pub fn handle_keyboard_input(&mut self, event: &winit::event::KeyEvent, _device: &Device) {
+        use winit::keyboard::{KeyCode, PhysicalKey};
+        
+        // Convert key event to string for matching with DSL configuration
+        let key_str = match event.physical_key {
+            PhysicalKey::Code(KeyCode::KeyW) => "W",
+            PhysicalKey::Code(KeyCode::KeyS) => "S",
+            PhysicalKey::Code(KeyCode::KeyA) => "A",
+            PhysicalKey::Code(KeyCode::KeyD) => "D",
+            PhysicalKey::Code(KeyCode::Space) => "Space",
+            PhysicalKey::Code(KeyCode::ShiftLeft) | PhysicalKey::Code(KeyCode::ShiftRight) => "Shift",
+            PhysicalKey::Code(KeyCode::ArrowUp) => "Up",
+            PhysicalKey::Code(KeyCode::ArrowDown) => "Down",
+            PhysicalKey::Code(KeyCode::ArrowLeft) => "Left",
+            PhysicalKey::Code(KeyCode::ArrowRight) => "Right",
+            _ => return,
+        };
+        
+        match event.state {
+            winit::event::ElementState::Pressed => {
+                self.keyboard_state.keys_pressed.insert(key_str.to_string());
+            }
+            winit::event::ElementState::Released => {
+                self.keyboard_state.keys_pressed.remove(key_str);
+            }
+        }
+    }
+    
+    pub fn update_camera_from_input(&mut self, dt: f32) {
+        if let Some(input_data) = &self.scene_data.input {
+            if let Some(controls) = &input_data.camera_controls {
+                let move_speed = controls.move_speed * dt;
+                let rotate_speed = controls.rotate_speed * dt;
+                
+                // Get camera forward and right vectors
+                let forward = (self.camera_target - self.camera.position).normalize();
+                let right = forward.cross(Vec3::Y).normalize();
+                let up = Vec3::Y;
+                
+                // Handle movement
+                if self.keyboard_state.keys_pressed.contains(&controls.movement_keys.forward) {
+                    self.camera.position = self.camera.position + forward * move_speed;
+                    self.camera_target = self.camera_target + forward * move_speed;
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.movement_keys.backward) {
+                    self.camera.position = self.camera.position - forward * move_speed;
+                    self.camera_target = self.camera_target - forward * move_speed;
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.movement_keys.left) {
+                    self.camera.position = self.camera.position - right * move_speed;
+                    self.camera_target = self.camera_target - right * move_speed;
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.movement_keys.right) {
+                    self.camera.position = self.camera.position + right * move_speed;
+                    self.camera_target = self.camera_target + right * move_speed;
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.movement_keys.up) {
+                    self.camera.position = self.camera.position + up * move_speed;
+                    self.camera_target = self.camera_target + up * move_speed;
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.movement_keys.down) {
+                    self.camera.position = self.camera.position - up * move_speed;
+                    self.camera_target = self.camera_target - up * move_speed;
+                }
+                
+                // Handle rotation (orbit around target)
+                if self.keyboard_state.keys_pressed.contains(&controls.rotation_keys.yaw_left) {
+                    let offset = self.camera.position - self.camera_target;
+                    let angle = rotate_speed;
+                    let cos = angle.cos();
+                    let sin = angle.sin();
+                    let new_x = offset.x * cos - offset.z * sin;
+                    let new_z = offset.x * sin + offset.z * cos;
+                    self.camera.position = self.camera_target + Vec3::new(new_x, offset.y, new_z);
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.rotation_keys.yaw_right) {
+                    let offset = self.camera.position - self.camera_target;
+                    let angle = -rotate_speed;
+                    let cos = angle.cos();
+                    let sin = angle.sin();
+                    let new_x = offset.x * cos - offset.z * sin;
+                    let new_z = offset.x * sin + offset.z * cos;
+                    self.camera.position = self.camera_target + Vec3::new(new_x, offset.y, new_z);
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.rotation_keys.pitch_up) {
+                    let offset = self.camera.position - self.camera_target;
+                    // Simple pitch by adjusting y position
+                    let distance = offset.length();
+                    self.camera.position.y = self.camera.position.y + rotate_speed * distance * 0.5;
+                }
+                if self.keyboard_state.keys_pressed.contains(&controls.rotation_keys.pitch_down) {
+                    let offset = self.camera.position - self.camera_target;
+                    // Simple pitch by adjusting y position
+                    let distance = offset.length();
+                    self.camera.position.y = self.camera.position.y - rotate_speed * distance * 0.5;
+                }
+                
+                // Update the camera view matrix after movement
+                self.camera = Camera::perspective(
+                    self.camera.position,
+                    self.camera_target,
+                    Vec3::Y,
+                    std::f32::consts::FRAC_PI_4, // TODO: Store FOV properly
+                    self.aspect_ratio,
+                    0.1,
+                    100.0,
+                );
+            }
+        }
     }
 }

@@ -39,6 +39,7 @@ pub struct Scene3D {
     pub ui_elements: Vec<UIElement>,
     pub camera: Option<CameraDef>,
     pub lighting: Option<LightingDef>,
+    pub input: Option<InputDef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +98,45 @@ pub struct UIElement {
     pub text: Option<String>,
     pub color: [f32; 4],
     pub behavior: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputDef {
+    pub camera_controls: Option<CameraControls>,
+    pub key_bindings: Vec<KeyBinding>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraControls {
+    pub move_speed: f32,
+    pub rotate_speed: f32,
+    pub movement_keys: MovementKeys,
+    pub rotation_keys: RotationKeys,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MovementKeys {
+    pub forward: String,  // default: "W"
+    pub backward: String, // default: "S"
+    pub left: String,     // default: "A"
+    pub right: String,    // default: "D"
+    pub up: String,       // default: "Space"
+    pub down: String,     // default: "Shift"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotationKeys {
+    pub pitch_up: String,    // default: "Up"
+    pub pitch_down: String,  // default: "Down"
+    pub yaw_left: String,    // default: "Left"
+    pub yaw_right: String,   // default: "Right"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyBinding {
+    pub key: String,
+    pub action: String,
+    pub target: Option<String>, // object or behavior to trigger
 }
 
 impl Expr {
