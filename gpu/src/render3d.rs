@@ -377,55 +377,91 @@ impl Renderer3D {
     }
 
     pub fn render(&self, device: &Device, queue: &Queue, view: &TextureView, depth_view: &TextureView) {
-        // Render 3D scene first
-        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("3D Render Encoder"),
-        });
-        
-        {
-            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("3D Scene Render Pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: depth_view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
+        // Clear first
+        if self.meshes.is_empty() {
+            // Just clear if no meshes
+            let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Clear Encoder"),
+            });
+            {
+                let _render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("Clear Pass"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(Operations {
+                            load: LoadOp::Clear(1.0),
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
                     }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            }
+            queue.submit(std::iter::once(encoder.finish()));
+            return;
+        }
+        
+        // Render each mesh with proper uniform updates
+        for (i, mesh) in self.meshes.iter().enumerate() {
+            let uniforms = Uniforms {
+                view_proj: self.camera.view_projection,
+                model: mesh.transform.to_matrix(),
+                time: self.time,
+                _pad: [0.0; 3],
+            };
+            
+            // Update uniforms for this specific mesh BEFORE creating the command encoder
+            queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+            
+            let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                label: Some(&format!("3D Render Encoder for Mesh {}", i)),
             });
             
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            
-            // Render all meshes
-            for mesh in &self.meshes {
-                let uniforms = Uniforms {
-                    view_proj: self.camera.view_projection,
-                    model: mesh.transform.to_matrix(),
-                    time: self.time,
-                    _pad: [0.0; 3],
-                };
+            {
+                let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some(&format!("3D Scene Render Pass for Mesh {}", i)),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: if i == 0 { 
+                                LoadOp::Clear(Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 })
+                            } else {
+                                LoadOp::Load
+                            },
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(Operations {
+                            load: if i == 0 { LoadOp::Clear(1.0) } else { LoadOp::Load },
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
                 
-                queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
-                
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint16);
                 render_pass.draw_indexed(0..mesh.indices.len() as u32, 0, 0..1);
             }
+            
+            queue.submit(std::iter::once(encoder.finish()));
         }
-        
-        queue.submit(std::iter::once(encoder.finish()));
         
         // Render UI on top
         self.ui_system.render(device, queue, view, depth_view);
