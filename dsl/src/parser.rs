@@ -320,6 +320,7 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
     };
     let material = None;
     let mut behavior = None;
+    let mut interactive = false;
     
     for form in &parts[2..] {
         if let Expr::List(prop) = form {
@@ -337,6 +338,23 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
                     "behavior" => {
                         if let Expr::Sym(b) = &prop[1] {
                             behavior = Some(b.clone());
+                            // Special case: "interactive" behavior enables gizmos
+                            if b == "interactive" {
+                                interactive = true;
+                            }
+                        }
+                    }
+                    "interactive" => {
+                        // Allow explicit (interactive true/false) syntax
+                        if prop.len() > 1 {
+                            interactive = match &prop[1] {
+                                Expr::Bool(b) => *b,
+                                Expr::Sym(s) if s == "true" => true,
+                                Expr::Sym(s) if s == "false" => false,
+                                _ => true,
+                            };
+                        } else {
+                            interactive = true;
                         }
                     }
                     _ => {}
@@ -351,6 +369,7 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
         transform,
         material,
         behavior,
+        interactive,
     })
 }
 
@@ -644,6 +663,7 @@ fn parse_camera_controls(parts: &[Expr]) -> anyhow::Result<CameraControls> {
         yaw_left: "Left".to_string(),
         yaw_right: "Right".to_string(),
     };
+    let mut orbit_controls = None;
     
     for form in parts {
         let Expr::List(prop) = form else {
@@ -701,6 +721,9 @@ fn parse_camera_controls(parts: &[Expr]) -> anyhow::Result<CameraControls> {
                     }
                 }
             }
+            "orbit-controls" => {
+                orbit_controls = Some(parse_orbit_controls(&prop[1..])?);
+            }
             _ => {}
         }
     }
@@ -710,6 +733,86 @@ fn parse_camera_controls(parts: &[Expr]) -> anyhow::Result<CameraControls> {
         rotate_speed,
         movement_keys,
         rotation_keys,
+        orbit_controls,
+    })
+}
+
+fn parse_orbit_controls(parts: &[Expr]) -> anyhow::Result<OrbitControls> {
+    let mut enabled = true;
+    let mut sensitivity = 1.0;
+    let mut damping = 0.05;
+    let mut min_distance = 1.0;
+    let mut max_distance = 100.0;
+    let mut min_polar_angle = 0.0;
+    let mut max_polar_angle = std::f32::consts::PI;
+    let mut enable_zoom = true;
+    let mut zoom_speed = 1.0;
+    
+    for form in parts {
+        let Expr::List(prop) = form else {
+            continue;
+        };
+        
+        if prop.len() < 2 {
+            continue;
+        }
+        
+        let Expr::Sym(tag) = &prop[0] else {
+            continue;
+        };
+        
+        match tag.as_str() {
+            "enabled" => {
+                enabled = match &prop[1] {
+                    Expr::Bool(b) => *b,
+                    Expr::Sym(s) if s == "true" => true,
+                    Expr::Sym(s) if s == "false" => false,
+                    _ => true,
+                };
+            }
+            "sensitivity" => {
+                sensitivity = parse_float(&prop[1])?;
+            }
+            "damping" => {
+                damping = parse_float(&prop[1])?;
+            }
+            "min-distance" => {
+                min_distance = parse_float(&prop[1])?;
+            }
+            "max-distance" => {
+                max_distance = parse_float(&prop[1])?;
+            }
+            "min-polar-angle" => {
+                min_polar_angle = parse_float(&prop[1])?;
+            }
+            "max-polar-angle" => {
+                max_polar_angle = parse_float(&prop[1])?;
+            }
+            "enable-zoom" => {
+                enable_zoom = match &prop[1] {
+                    Expr::Bool(b) => *b,
+                    Expr::Sym(s) if s == "true" => true,
+                    Expr::Sym(s) if s == "false" => false,
+                    _ => true,
+                };
+            }
+            "zoom-speed" => {
+                zoom_speed = parse_float(&prop[1])?;
+            }
+            _ => {}
+        }
+    }
+    
+    Ok(OrbitControls {
+        enabled,
+        sensitivity,
+        damping,
+        min_distance,
+        max_distance,
+        min_polar_angle,
+        max_polar_angle,
+        enable_zoom,
+        zoom_speed,
     })
 }
 

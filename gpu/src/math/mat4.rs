@@ -93,6 +93,27 @@ impl Mat4 {
         }
     }
     
+    pub fn from_quat(q: super::Quat) -> Self {
+        let xx = q.x * q.x;
+        let yy = q.y * q.y;
+        let zz = q.z * q.z;
+        let xy = q.x * q.y;
+        let xz = q.x * q.z;
+        let yz = q.y * q.z;
+        let wx = q.w * q.x;
+        let wy = q.w * q.y;
+        let wz = q.w * q.z;
+        
+        Self {
+            cols: [
+                [1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz), 2.0 * (xz - wy), 0.0],
+                [2.0 * (xy - wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx), 0.0],
+                [2.0 * (xz + wy), 2.0 * (yz - wx), 1.0 - 2.0 * (xx + yy), 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
+    }
+    
     pub fn perspective(fovy: f32, aspect: f32, near: f32, far: f32) -> Self {
         let f = 1.0 / (fovy * 0.5).tan();
         let nf = 1.0 / (near - far);

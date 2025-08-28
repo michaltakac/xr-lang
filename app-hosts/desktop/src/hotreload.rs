@@ -251,8 +251,10 @@ impl SceneLoader {
                     name: object.name.clone(),
                     position: gpu::Vec3::from(object.transform.position),
                     scale: gpu::Vec3::from(object.transform.scale),
+                    rotation: gpu::Quat::IDENTITY,  // For now, using identity
                     color: self.generate_color_for_cube(&object.name),
                     behavior: object.behavior.clone(),
+                    interactive: object.interactive,
                 };
                 
                 println!("    ✓ Cube: pos({:.1}, {:.1}, {:.1}), scale({:.1}, {:.1}, {:.1}), behavior: {:?}", 
@@ -348,6 +350,19 @@ impl SceneLoader {
                             yaw_left: controls.rotation_keys.yaw_left.clone(),
                             yaw_right: controls.rotation_keys.yaw_right.clone(),
                         },
+                        orbit_controls: controls.orbit_controls.as_ref().map(|oc| {
+                            gpu::OrbitControlsData {
+                                enabled: oc.enabled,
+                                sensitivity: oc.sensitivity,
+                                damping: oc.damping,
+                                min_distance: oc.min_distance,
+                                max_distance: oc.max_distance,
+                                min_polar_angle: oc.min_polar_angle,
+                                max_polar_angle: oc.max_polar_angle,
+                                enable_zoom: oc.enable_zoom,
+                                zoom_speed: oc.zoom_speed,
+                            }
+                        }),
                     }
                 }),
             }
@@ -406,8 +421,10 @@ impl SceneLoader {
                     name: object.name.clone(),
                     position: gpu::Vec3::from(object.transform.position),
                     scale: gpu::Vec3::from(object.transform.scale),
+                    rotation: gpu::Quat::IDENTITY,  // For now, using identity
                     color: self.generate_color_for_cube(&object.name),
                     behavior: object.behavior.clone(),
+                    interactive: object.interactive,
                 };
                 
                 cubes.push(cube);
@@ -475,15 +492,19 @@ impl SceneLoader {
                 name: "cube1".to_string(),
                 position: gpu::Vec3::new(-3.0, 0.0, 0.0),
                 scale: gpu::Vec3::ONE,
+                rotation: gpu::Quat::IDENTITY,
                 color: gpu::Vec3::new(1.0, 0.2, 0.2), // Red
                 behavior: Some("spin".to_string()),
+                interactive: false,
             },
             gpu::CubeData {
                 name: "cube2".to_string(),
                 position: gpu::Vec3::new(0.0, 0.0, 0.0),
                 scale: gpu::Vec3::new(1.5, 1.5, 1.5),
+                rotation: gpu::Quat::IDENTITY,
                 color: gpu::Vec3::new(0.2, 1.0, 0.2), // Green
                 behavior: Some("spin".to_string()),
+                interactive: false,
             },
         ]
     }
@@ -533,12 +554,14 @@ impl SceneLoader {
                         name: if current_name.is_empty() { format!("cube{}", cubes.len() + 1) } else { current_name.clone() },
                         position: current_position.unwrap_or(gpu::Vec3::ZERO),
                         scale: current_scale.unwrap_or(gpu::Vec3::ONE),
+                        rotation: gpu::Quat::IDENTITY,
                         color: gpu::Vec3::new(
                             0.5 + (cubes.len() as f32 * 0.3) % 1.0,
                             0.3 + (cubes.len() as f32 * 0.5) % 1.0,
                             0.7 + (cubes.len() as f32 * 0.7) % 1.0,
                         ),
                         behavior: current_behavior.clone(),
+                        interactive: false,  // Default to false for text-parsed cubes
                     });
                 }
                 parsing_object = false;

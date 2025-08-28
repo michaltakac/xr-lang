@@ -162,10 +162,23 @@ pub struct Renderer3D {
     pub scene_data: SceneData,
     pub aspect_ratio: f32,
     pub keyboard_state: KeyboardState,
+    pub mouse_state: MouseState,
+    pub orbit_state: OrbitState,
+}
+
+pub struct OrbitState {
+    pub spherical_coords: (f32, f32, f32), // (radius, theta, phi)
 }
 
 pub struct KeyboardState {
     pub keys_pressed: std::collections::HashSet<String>,
+}
+
+pub struct MouseState {
+    pub is_dragging: bool,
+    pub last_position: Option<(f32, f32)>,
+    pub delta: (f32, f32),
+    pub scroll_delta: f32,
 }
 
 impl Renderer3D {
@@ -265,6 +278,12 @@ impl Renderer3D {
             100.0,
         );
         
+        // Calculate initial spherical coords from camera position
+        let offset = Vec3::new(0.0, 5.0, 10.0) - camera_target;
+        let radius = offset.length();
+        let theta = offset.z.atan2(offset.x);
+        let phi = (offset.y / radius).acos();
+        
         let mut renderer = Self {
             render_pipeline,
             uniform_buffer,
@@ -278,6 +297,15 @@ impl Renderer3D {
             aspect_ratio: config.width as f32 / config.height as f32,
             keyboard_state: KeyboardState {
                 keys_pressed: std::collections::HashSet::new(),
+            },
+            mouse_state: MouseState {
+                is_dragging: false,
+                last_position: None,
+                delta: (0.0, 0.0),
+                scroll_delta: 0.0,
+            },
+            orbit_state: OrbitState {
+                spherical_coords: (radius, theta, phi),
             },
         };
         
@@ -314,7 +342,7 @@ impl Renderer3D {
             mesh.transform.scale = cube_data.scale;
             
             // Reset rotation to avoid accumulating rotations on reload
-            mesh.transform.rotation = Vec3::ZERO;
+            mesh.transform.rotation = Quat::IDENTITY;
             
             self.meshes.push(mesh);
         }
@@ -332,6 +360,13 @@ impl Renderer3D {
                 0.1,
                 100.0,
             );
+            
+            // Update spherical coordinates for orbit controls
+            let offset = camera_data.position - camera_data.target;
+            let radius = offset.length();
+            let theta = offset.z.atan2(offset.x);
+            let phi = (offset.y / radius).acos();
+            self.orbit_state.spherical_coords = (radius, theta, phi);
             
             println!("📹 Applied DSL Camera: pos({:.1}, {:.1}, {:.1}), target({:.1}, {:.1}, {:.1}), fov: {:.1}°", 
                 camera_data.position.x, camera_data.position.y, camera_data.position.z,
@@ -383,10 +418,12 @@ impl Renderer3D {
                     0.0 // No rotation if no behavior
                 };
                 
-                mesh.transform.rotation.y += rotation_speed;
+                // Apply rotation around Y axis using quaternion
+                let rotation_delta = Quat::from_axis_angle(Vec3::Y, rotation_speed);
+                mesh.transform.rotation = rotation_delta * mesh.transform.rotation;
             } else {
-                // Fallback for any extra meshes
-                mesh.transform.rotation.y = self.time + i as f32;
+                // Fallback for any extra meshes - rotate around Y
+                mesh.transform.rotation = Quat::from_axis_angle(Vec3::Y, self.time + i as f32);
             }
         }
         
@@ -516,9 +553,78 @@ impl Renderer3D {
         }
     }
     
+    pub fn handle_mouse_button(&mut self, button: winit::event::MouseButton, state: winit::event::ElementState) {
+        use winit::event::{MouseButton, ElementState};
+        
+        if button == MouseButton::Left {
+            match state {
+                ElementState::Pressed => {
+                    self.mouse_state.is_dragging = true;
+                }
+                ElementState::Released => {
+                    self.mouse_state.is_dragging = false;
+                    self.mouse_state.last_position = None;
+                }
+            }
+        }
+    }
+    
+    pub fn handle_mouse_motion(&mut self, position: (f32, f32)) {
+        if self.mouse_state.is_dragging {
+            if let Some(last_pos) = self.mouse_state.last_position {
+                self.mouse_state.delta = (
+                    position.0 - last_pos.0,
+                    position.1 - last_pos.1,
+                );
+            }
+            self.mouse_state.last_position = Some(position);
+        } else {
+            self.mouse_state.delta = (0.0, 0.0);
+        }
+    }
+    
+    pub fn handle_mouse_wheel(&mut self, delta: f32) {
+        self.mouse_state.scroll_delta = delta;
+    }
+    
     pub fn update_camera_from_input(&mut self, dt: f32) {
         if let Some(input_data) = &self.scene_data.input {
             if let Some(controls) = &input_data.camera_controls {
+                // Handle orbit controls with mouse
+                if let Some(orbit) = &controls.orbit_controls {
+                    if orbit.enabled && self.mouse_state.is_dragging {
+                        // Update spherical coordinates based on mouse delta
+                        let sensitivity = orbit.sensitivity * 0.01;
+                        self.orbit_state.spherical_coords.1 -= self.mouse_state.delta.0 * sensitivity;
+                        self.orbit_state.spherical_coords.2 += self.mouse_state.delta.1 * sensitivity;
+                        
+                        // Clamp phi (vertical angle)
+                        self.orbit_state.spherical_coords.2 = self.orbit_state.spherical_coords.2
+                            .max(orbit.min_polar_angle)
+                            .min(orbit.max_polar_angle);
+                        
+                        // Clear delta after using it
+                        self.mouse_state.delta = (0.0, 0.0);
+                    }
+                    
+                    // Handle zoom with mouse wheel
+                    if orbit.enable_zoom && self.mouse_state.scroll_delta != 0.0 {
+                        let zoom_factor = 1.0 - self.mouse_state.scroll_delta * orbit.zoom_speed * 0.1;
+                        self.orbit_state.spherical_coords.0 *= zoom_factor;
+                        self.orbit_state.spherical_coords.0 = self.orbit_state.spherical_coords.0
+                            .max(orbit.min_distance)
+                            .min(orbit.max_distance);
+                        self.mouse_state.scroll_delta = 0.0;
+                    }
+                    
+                    // Convert spherical to Cartesian
+                    let (r, theta, phi) = self.orbit_state.spherical_coords;
+                    let x = r * phi.sin() * theta.cos();
+                    let y = r * phi.cos();
+                    let z = r * phi.sin() * theta.sin();
+                    self.camera.position = self.camera_target + Vec3::new(x, y, z);
+                }
+                
                 let move_speed = controls.move_speed * dt;
                 let rotate_speed = controls.rotate_speed * dt;
                 

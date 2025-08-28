@@ -18,8 +18,10 @@ pub struct CubeData {
     pub name: String,
     pub position: Vec3,
     pub scale: Vec3,
+    pub rotation: Quat,
     pub color: Vec3,
     pub behavior: Option<String>,
+    pub interactive: bool,  // New field for interactive behavior
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +67,20 @@ pub struct CameraControlsData {
     pub rotate_speed: f32,
     pub movement_keys: MovementKeysData,
     pub rotation_keys: RotationKeysData,
+    pub orbit_controls: Option<OrbitControlsData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OrbitControlsData {
+    pub enabled: bool,
+    pub sensitivity: f32,
+    pub damping: f32,
+    pub min_distance: f32,
+    pub max_distance: f32,
+    pub min_polar_angle: f32,
+    pub max_polar_angle: f32,
+    pub enable_zoom: bool,
+    pub zoom_speed: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -101,15 +117,19 @@ impl Default for SceneData {
                     name: "cube1".to_string(),
                     position: Vec3::new(-2.0, 0.0, 0.0),
                     scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
                     color: Vec3::new(1.0, 0.5, 0.0),
                     behavior: Some("spin".to_string()),
+                    interactive: false,
                 },
                 CubeData {
                     name: "cube2".to_string(),
                     position: Vec3::new(2.0, 0.0, 0.0),
                     scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
                     color: Vec3::new(0.0, 1.0, 0.5),
                     behavior: Some("spin".to_string()),
+                    interactive: false,
                 },
             ],
             ui_elements: vec![],

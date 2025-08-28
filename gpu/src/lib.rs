@@ -9,6 +9,7 @@ pub mod math;
 pub mod render3d;
 pub mod ui3d;
 pub mod scene;
+pub mod gizmo;
 
 pub use device::*;
 pub use shader::*;
@@ -19,6 +20,7 @@ pub use math::*;
 pub use render3d::*;
 pub use ui3d::*;
 pub use scene::*;
+pub use gizmo::*;
 
 use wgpu::*;
 

@@ -19,6 +19,7 @@ pub struct SimpleUI3D {
     pub panel_bind_group: Option<BindGroup>,
     pub text_renderer: Option<TextRenderer3D>,
     pub ui_elements: Vec<UIElementData>,
+    pub camera_view_proj: Mat4,
 }
 
 impl SimpleUI3D {
@@ -185,6 +186,7 @@ impl SimpleUI3D {
             panel_bind_group: Some(panel_bind_group),
             text_renderer: Some(text_renderer),
             ui_elements: Vec::new(),
+            camera_view_proj: Mat4::IDENTITY,
         }
     }
     
@@ -193,8 +195,9 @@ impl SimpleUI3D {
         log::info!("Updated UI elements: {} panels", self.ui_elements.len());
     }
     
-    pub fn update(&mut self, _dt: f32, _camera: &Camera, _device: &Device) {
-        // UI update logic would go here
+    pub fn update(&mut self, _dt: f32, camera: &Camera, _device: &Device) {
+        // Store camera view-projection for rendering
+        self.camera_view_proj = camera.view_projection;
     }
     
     pub fn render(&self, device: &Device, queue: &Queue, view: &TextureView, depth_view: &TextureView) {
@@ -214,17 +217,8 @@ impl SimpleUI3D {
         let panel_transform = Mat4::from_translation(Vec3::new(5.0, 0.0, -2.0)) * 
                               Mat4::from_scale(Vec3::new(1.5, 1.5, 1.0));
         
-        // For now, use identity view projection (will be updated with camera later)
-        let view_proj = Mat4::perspective(
-            std::f32::consts::FRAC_PI_3,  // 60 degree FOV
-            16.0 / 9.0,  // aspect ratio
-            0.1,
-            100.0
-        ) * Mat4::look_at(
-            Vec3::new(0.0, 8.0, 15.0),  // eye
-            Vec3::new(0.0, 0.0, 0.0),   // target
-            Vec3::Y                      // up
-        );
+        // Use the stored camera view-projection
+        let view_proj = self.camera_view_proj;
         
         // Prepare uniform data
         #[repr(C)]
@@ -287,8 +281,7 @@ impl SimpleUI3D {
                     let transform = Transform {
                         position: ui_element.position.into(),
                         _pad1: 0.0,
-                        rotation: Vec3::ZERO,
-                        _pad2: 0.0,
+                        rotation: Quat::IDENTITY,
                         scale: Vec3::ONE,
                         _pad3: 0.0,
                     };
@@ -313,9 +306,9 @@ impl SimpleUI3D {
                             usage: BufferUsages::INDEX,
                         });
                         
-                        // Update text uniforms
+                        // Update text uniforms with current camera view
                         let text_uniforms = super::text_renderer::TextUniforms {
-                            transform: view_proj * panel_transform,
+                            transform: self.camera_view_proj,
                             _pad: [0.0; 3],
                         };
                         

@@ -27,7 +27,17 @@
         (pitch-up Up)
         (pitch-down Down)
         (yaw-left Left)
-        (yaw-right Right))))
+        (yaw-right Right))
+      (orbit-controls
+        (enabled true)
+        (sensitivity 1.0)
+        (damping 0.05)
+        (min-distance 2.0)
+        (max-distance 50.0)
+        (min-polar-angle 0.1)
+        (max-polar-angle 3.0)
+        (enable-zoom true)
+        (zoom-speed 1.0))))
     
   (lighting
     (ambient 0.2 0.2 0.3)

@@ -2,12 +2,11 @@
 
 use crate::math::*;
 use wgpu::*;
-use wgpu::util::DeviceExt;
 use bytemuck::{Pod, Zeroable};
 use rusttype::{Font, Scale, point};
 use std::collections::HashMap;
 use super::sdf_generator;
-use super::debug_atlas;
+// use super::debug_atlas;  // Uncomment when debugging atlas generation
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -72,8 +71,8 @@ impl TextRenderer3D {
         let font = Font::try_from_bytes(&font_data)
             .expect("Failed to load default font");
         
-        // Create font atlas with the real font - use larger size for better quality
-        let font_size = 64.0;
+        // Create font atlas with the real font - balanced for quality and performance
+        let font_size = 72.0;  // Balanced size for good quality without hanging
         let (font_atlas, glyph_cache, atlas_size) = Self::create_font_atlas(device, queue, &font, font_size);
         
         log::info!("Font atlas created with {} glyphs", glyph_cache.len());
@@ -85,7 +84,9 @@ impl TextRenderer3D {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Nearest,  // Better for SDF
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 0.0,  // Disable mipmapping for now
             ..Default::default()
         });
         
@@ -241,11 +242,11 @@ impl TextRenderer3D {
         let scale = Scale::uniform(font_size);
         let mut glyph_cache = HashMap::new();
         
-        // Calculate atlas size needed - make it larger for SDF
-        let sdf_padding = 4; // Reduced padding for faster generation
-        let padding = 2;
+        // Calculate atlas size needed - optimized for performance
+        let sdf_padding = 6; // Balanced padding for quality and speed
+        let padding = 2;     // Standard padding between glyphs
         let chars_per_row = 16;
-        let cell_size = (font_size * 1.2) as u32 + (padding + sdf_padding) * 2;
+        let cell_size = (font_size * 1.3) as u32 + (padding + sdf_padding) * 2;  // Reasonable space per glyph
         let atlas_size = cell_size * chars_per_row;
         
         log::info!("Creating font atlas: size={}, cell_size={}, font_size={}", 
@@ -300,14 +301,15 @@ impl TextRenderer3D {
                 
                 // Generate SDF for this glyph
                 if pixels_written > 0 {
-                    if ch == 'A' || ch == ' ' || ch == '~' {
+                    if ch == 'A' || ch == ' ' || ch == '~' || ch == 'H' {
                         log::info!("Generating SDF for '{}' ({}x{} pixels)", ch, temp_width, temp_height);
                     }
+                    // Use optimized SDF generation
                     let sdf_data = sdf_generator::generate_sdf_fast(
                         &temp_buffer,
                         temp_width,
                         temp_height,
-                        sdf_padding as i32
+                        sdf_padding as i32  // Normal spread for performance
                     );
                     
                     // Copy SDF data to atlas
@@ -370,7 +372,7 @@ impl TextRenderer3D {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8UnormSrgb,
+            format: TextureFormat::Rgba8Unorm,  // Use linear for SDF data
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -399,10 +401,12 @@ impl TextRenderer3D {
         // Debug: Log rasterization results and save atlas
         log::info!("Generated SDF atlas with {} glyphs, atlas size: {}x{}", rasterized_count, atlas_size, atlas_size);
         
-        // Skip saving debug atlas for performance during runtime
+        // Skip saving debug atlas in normal operation for performance
         // Uncomment to debug:
         // if let Err(e) = debug_atlas::save_atlas_as_ppm(&atlas_data, atlas_size, atlas_size, "font_atlas_sdf_debug.ppm") {
         //     log::warn!("Failed to save debug SDF atlas: {}", e);
+        // } else {
+        //     log::info!("Debug SDF atlas saved to font_atlas_sdf_debug.ppm");
         // }
         
         if let Some(info) = glyph_cache.get(&'A') {
@@ -447,7 +451,7 @@ impl TextRenderer3D {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
         
-        let scale = 0.01; // Scale factor for 3D world
+        let scale = 0.008; // Slightly smaller scale for better proportions with larger font size
         let line_height = self.font_size * scale * 1.2;
         
         let mut cursor_x = 0.0;

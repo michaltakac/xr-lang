@@ -61,12 +61,14 @@ pub fn generate_sdf(input: &[u8], width: usize, height: usize, spread: f32) -> V
 pub fn generate_sdf_fast(input: &[u8], width: usize, height: usize, spread: i32) -> Vec<u8> {
     // Create a distance grid
     let mut dist_grid: Vec<(i32, i32)> = vec![(i32::MAX, i32::MAX); width * height];
+    let mut is_inside_grid: Vec<bool> = vec![false; width * height];
     
     // Initialize with edge pixels
     for y in 0..height {
         for x in 0..width {
             let idx = y * width + x;
-            let is_inside = input[idx * 4 + 3] > 127;
+            let is_inside = input[idx * 4 + 3] > 200;  // Higher threshold for better edge detection
+            is_inside_grid[idx] = is_inside;
             
             // Check if this pixel is on an edge
             let mut is_edge = false;
@@ -79,7 +81,7 @@ pub fn generate_sdf_fast(input: &[u8], width: usize, height: usize, spread: i32)
                     
                     if nx >= 0 && nx < width as i32 && ny >= 0 && ny < height as i32 {
                         let nidx = (ny as usize) * width + (nx as usize);
-                        let neighbor_inside = input[nidx * 4 + 3] > 127;
+                        let neighbor_inside = input[nidx * 4 + 3] > 200;
                         if is_inside != neighbor_inside {
                             is_edge = true;
                             break;
@@ -95,8 +97,9 @@ pub fn generate_sdf_fast(input: &[u8], width: usize, height: usize, spread: i32)
         }
     }
     
-    // Jump flooding passes
-    let passes = (width.max(height) as f32).log2().ceil() as u32;
+    // Jump flooding passes - limit for performance
+    let max_dim = width.max(height);
+    let passes = ((max_dim as f32).log2().ceil() as u32).min(8); // Limit passes for performance
     for pass in 0..passes {
         let step = 1 << (passes - 1 - pass);
         
@@ -137,25 +140,36 @@ pub fn generate_sdf_fast(input: &[u8], width: usize, height: usize, spread: i32)
         }
     }
     
-    // Convert to SDF values
+    // Convert to SDF values with improved normalization
     let mut output = vec![128u8; width * height];
+    let spread_f = spread as f32;
+    
     for y in 0..height {
         for x in 0..width {
             let idx = y * width + x;
-            let is_inside = input[idx * 4 + 3] > 127;
+            let is_inside = is_inside_grid[idx];
             let seed = dist_grid[idx];
             
             if seed.0 != i32::MAX {
-                let dist = ((x as i32 - seed.0).pow(2) + (y as i32 - seed.1).pow(2)) as f32;
-                let dist = dist.sqrt().min(spread as f32);
+                let dx = (x as i32 - seed.0) as f32;
+                let dy = (y as i32 - seed.1) as f32;
+                let dist = (dx * dx + dy * dy).sqrt();
                 
-                let normalized = if is_inside {
-                    0.5 + 0.5 * (dist / spread as f32)
+                // Improved normalization for sharper edges
+                let normalized_dist = (dist / spread_f).min(1.0);
+                
+                let sdf_value = if is_inside {
+                    // Inside: 0.5 to 1.0
+                    0.5 + 0.5 * normalized_dist.powf(0.75)  // Power curve for sharper falloff
                 } else {
-                    0.5 - 0.5 * (dist / spread as f32)
+                    // Outside: 0.0 to 0.5
+                    0.5 - 0.5 * normalized_dist.powf(0.75)
                 };
                 
-                output[idx] = (normalized.clamp(0.0, 1.0) * 255.0) as u8;
+                output[idx] = (sdf_value.clamp(0.0, 1.0) * 255.0) as u8;
+            } else {
+                // For pixels far from any edge, set to fully inside or outside
+                output[idx] = if is_inside { 255 } else { 0 };
             }
         }
     }

@@ -2,10 +2,12 @@
 
 pub mod vec3;
 pub mod mat4;
+pub mod quat;
 pub mod transform;
 
 pub use vec3::*;
 pub use mat4::*;
+pub use quat::*;
 pub use transform::*;
 
 // Additional vector types for UI

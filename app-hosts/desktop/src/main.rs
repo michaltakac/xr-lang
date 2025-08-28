@@ -5,10 +5,11 @@ mod hotreload;
 use anyhow::Result;
 use std::time::Instant;
 use winit::{
-    event::{Event, WindowEvent, KeyEvent, ElementState},
+    event::{Event, WindowEvent, KeyEvent, ElementState, MouseButton, MouseScrollDelta},
     event_loop::EventLoop,
     window::{Window},
     keyboard::{KeyCode, PhysicalKey},
+    dpi::PhysicalPosition,
 };
 use hotreload::{HotReloader, SceneLoader};
 
@@ -45,13 +46,25 @@ async fn main() -> Result<()> {
     let mut hot_reloader = HotReloader::new(&examples_path)?;
     let mut scene_loader = SceneLoader::new();
     
-    // Try to load the spinning cubes example initially
-    let spinning_cubes_path = examples_path.join("spinning_cubes.xrdsl");
-    if let Ok(Some(scene_data)) = scene_loader.load_scene_from_file(spinning_cubes_path.to_str().unwrap()) {
-        renderer_3d.load_scene(scene_data, &gpu_ctx.device);
-        println!("✅ Loaded initial scene from: {}", spinning_cubes_path.display());
+    // Load scene from command-line argument or default to spinning_cubes.xrdsl
+    let args: Vec<String> = std::env::args().collect();
+    let initial_scene = if args.len() > 1 {
+        // Use provided scene file
+        std::path::PathBuf::from(&args[1])
     } else {
-        println!("⚠️  Could not load spinning_cubes.xrdsl, using default scene");
+        // Default to spinning_cubes.xrdsl
+        examples_path.join("spinning_cubes.xrdsl")
+    };
+    
+    if initial_scene.exists() {
+        if let Ok(Some(scene_data)) = scene_loader.load_scene_from_file(initial_scene.to_str().unwrap()) {
+            renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+            println!("✅ Loaded initial scene from: {}", initial_scene.display());
+        } else {
+            println!("⚠️  Could not parse {}, using default scene", initial_scene.display());
+        }
+    } else {
+        println!("⚠️  Scene file {} not found, using default scene", initial_scene.display());
     }
     
     println!("🎨 3D scene ready! You should see animated cubes.");
@@ -61,8 +74,9 @@ async fn main() -> Result<()> {
     println!("🛠️  3D UI system has been integrated with ECS architecture using hecs!");
     println!("📝 The system includes: 3D code editor, button components, log viewer");
     println!("⌨️  Input handling: mouse raycasting, keyboard input, text editing");
-    println!("🔥 HOT-RELOAD ACTIVE: Edit examples/spinning_cubes.xrdsl to see live updates!");
+    println!("🔥 HOT-RELOAD ACTIVE: Edit any .xrdsl file in examples/ to see live updates!");
     println!("✨ Live DSL compilation and 3D scene updates working!");
+    println!("📌 TIP: Run with a scene file: cargo run -p desktop -- examples/rotation_test.xrdsl");
     
     // Request the initial frame
     window.request_redraw();
@@ -81,6 +95,29 @@ async fn main() -> Result<()> {
                 ..
             } => {
                 renderer_3d.handle_keyboard_input(&event, &gpu_ctx.device);
+            }
+            Event::WindowEvent {
+                event: WindowEvent::MouseInput { button, state, .. },
+                ..
+            } => {
+                renderer_3d.handle_mouse_button(button, state);
+            }
+            Event::WindowEvent {
+                event: WindowEvent::CursorMoved { position, .. },
+                ..
+            } => {
+                let PhysicalPosition { x, y } = position;
+                renderer_3d.handle_mouse_motion((x as f32, y as f32));
+            }
+            Event::WindowEvent {
+                event: WindowEvent::MouseWheel { delta, .. },
+                ..
+            } => {
+                let scroll_delta = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(PhysicalPosition { y, .. }) => y as f32 * 0.01,
+                };
+                renderer_3d.handle_mouse_wheel(scroll_delta);
             }
             Event::WindowEvent {
                 event: WindowEvent::RedrawRequested,

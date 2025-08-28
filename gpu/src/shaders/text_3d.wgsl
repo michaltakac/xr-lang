@@ -41,21 +41,33 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     // Sample the SDF texture
     let distance = textureSample(font_texture, font_sampler, input.uv).r;
     
-    // SDF rendering with smoothstep for anti-aliasing
+    // SDF rendering with improved anti-aliasing
     // 0.5 is the edge of the glyph in SDF space
-    // Adjust the smoothstep range for sharper or softer edges
-    let width = 0.7;  // Controls edge softness
     let edge = 0.5;   // The actual edge position in SDF
     
     // Calculate screen-space derivatives for adaptive anti-aliasing
     let dfdx = dpdx(distance);
     let dfdy = dpdy(distance);
     let grad_len = length(vec2<f32>(dfdx, dfdy));
-    let pixel_dist = grad_len * width;
+    
+    // Adaptive width based on screen-space gradient
+    // This ensures consistent edge quality at all viewing distances
+    let width = min(grad_len * 1.5, 0.15);  // Clamped for sharper edges
     
     // Use smoothstep for anti-aliased edge
-    let alpha = smoothstep(edge - pixel_dist, edge + pixel_dist, distance);
+    let alpha = smoothstep(edge - width, edge + width, distance);
+    
+    // Optional: Add slight outline for better visibility
+    // Uncomment for dark outline effect
+    // let outline_edge = 0.4;
+    // let outline_alpha = smoothstep(outline_edge - width, outline_edge + width, distance);
+    // let final_color = mix(vec4<f32>(0.0, 0.0, 0.0, outline_alpha), 
+    //                       vec4<f32>(input.color.rgb, alpha), 
+    //                       alpha);
+    
+    // Apply gamma correction for better color reproduction
+    let gamma_corrected = pow(input.color.rgb, vec3<f32>(2.2));
     
     // Apply text color with calculated alpha
-    return vec4<f32>(input.color.rgb, input.color.a * alpha);
+    return vec4<f32>(gamma_corrected, input.color.a * alpha);
 }

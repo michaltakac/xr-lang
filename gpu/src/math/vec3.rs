@@ -21,6 +21,10 @@ impl Vec3 {
         Self { x, y, z }
     }
     
+    pub const fn splat(value: f32) -> Self {
+        Self { x: value, y: value, z: value }
+    }
+    
     pub fn length(self) -> f32 {
         (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
     }
@@ -84,6 +88,17 @@ impl std::ops::Mul<f32> for Vec3 {
             x: self.x * scalar,
             y: self.y * scalar,
             z: self.z * scalar,
+        }
+    }
+}
+
+impl std::ops::Mul<Vec3> for f32 {
+    type Output = Vec3;
+    fn mul(self, vec: Vec3) -> Vec3 {
+        Vec3 {
+            x: self * vec.x,
+            y: self * vec.y,
+            z: self * vec.z,
         }
     }
 }

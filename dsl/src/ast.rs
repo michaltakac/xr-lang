@@ -49,6 +49,7 @@ pub struct Object3D {
     pub transform: TransformDef,
     pub material: Option<MaterialDef>,
     pub behavior: Option<String>, // reference to behavior
+    pub interactive: bool, // New field for making object interactively transformable
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +113,20 @@ pub struct CameraControls {
     pub rotate_speed: f32,
     pub movement_keys: MovementKeys,
     pub rotation_keys: RotationKeys,
+    pub orbit_controls: Option<OrbitControls>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrbitControls {
+    pub enabled: bool,
+    pub sensitivity: f32,
+    pub damping: f32,
+    pub min_distance: f32,
+    pub max_distance: f32,
+    pub min_polar_angle: f32,  // min pitch in radians
+    pub max_polar_angle: f32,  // max pitch in radians
+    pub enable_zoom: bool,
+    pub zoom_speed: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
