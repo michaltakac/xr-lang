@@ -321,6 +321,7 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
     let material = None;
     let mut behavior = None;
     let mut interactive = false;
+    let mut meta = None;
     
     for form in &parts[2..] {
         if let Expr::List(prop) = form {
@@ -357,6 +358,9 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
                             interactive = true;
                         }
                     }
+                    "meta" => {
+                        meta = Some(parse_meta_directive(&prop[1..])?);
+                    }
                     _ => {}
                 }
             }
@@ -370,6 +374,7 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
         material,
         behavior,
         interactive,
+        meta,
     })
 }
 
@@ -380,6 +385,7 @@ fn parse_camera(parts: &[Expr]) -> anyhow::Result<CameraDef> {
     let mut fov = 45.0; // Default FOV in degrees
     let mut near = 0.1;
     let mut far = 100.0;
+    let mut meta = None;
     
     // Parse camera properties
     for part in parts {
@@ -418,6 +424,9 @@ fn parse_camera(parts: &[Expr]) -> anyhow::Result<CameraDef> {
                             far = parse_float(&list[1])?;
                         }
                     }
+                    "meta" => {
+                        meta = Some(parse_meta_directive(&list[1..])?);
+                    }
                     _ => {} // Ignore unknown properties
                 }
             }
@@ -431,6 +440,7 @@ fn parse_camera(parts: &[Expr]) -> anyhow::Result<CameraDef> {
         fov: fov * std::f32::consts::PI / 180.0, // Convert degrees to radians
         near,
         far,
+        meta,
     })
 }
 
@@ -844,5 +854,59 @@ fn parse_key_binding(parts: &[Expr]) -> anyhow::Result<KeyBinding> {
         key,
         action,
         target,
+    })
+}
+
+fn parse_meta_directive(parts: &[Expr]) -> anyhow::Result<crate::ast::MetaDirective> {
+    let mut preserve_mode = "reset-on-reload".to_string(); // Default mode
+    let mut properties = Vec::new();
+    
+    for expr in parts {
+        match expr {
+            Expr::Sym(s) => {
+                // Single symbols are preserve modes
+                match s.as_str() {
+                    "preserve-runtime" | "preserve" => {
+                        preserve_mode = "preserve-runtime".to_string();
+                    }
+                    "sync-to-code" | "sync" => {
+                        preserve_mode = "sync-to-code".to_string();
+                    }
+                    "reset-on-reload" | "reset" => {
+                        preserve_mode = "reset-on-reload".to_string();
+                    }
+                    "volatile" => {
+                        preserve_mode = "volatile".to_string();
+                    }
+                    _ => {
+                        // Unknown symbol, treat as property to preserve
+                        properties.push(s.clone());
+                    }
+                }
+            }
+            Expr::List(list) => {
+                // Lists specify properties to preserve
+                if let Some(Expr::Sym(tag)) = list.first() {
+                    if tag == "preserve" || tag == "properties" {
+                        for item in &list[1..] {
+                            if let Expr::Sym(prop) = item {
+                                properties.push(prop.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    // If no properties specified, default to preserving all
+    if properties.is_empty() && preserve_mode != "reset-on-reload" {
+        properties = vec!["position".to_string(), "rotation".to_string(), "scale".to_string()];
+    }
+    
+    Ok(crate::ast::MetaDirective {
+        preserve_mode,
+        properties,
     })
 }

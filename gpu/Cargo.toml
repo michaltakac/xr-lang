@@ -16,3 +16,4 @@ hecs.workspace = true
 log.workspace = true
 rusttype.workspace = true
 vm = { path = "../vm" }
+dsl = { path = "../dsl" }

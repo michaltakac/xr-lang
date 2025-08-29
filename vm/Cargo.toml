@@ -11,3 +11,6 @@ thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 bytemuck.workspace = true
+
+# Internal dependencies
+dsl = { path = "../dsl" }

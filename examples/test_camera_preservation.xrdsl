@@ -1,0 +1,69 @@
+;; Test for camera state preservation feature
+;; This demonstrates the testing DSL primitives
+
+(deftest "camera-preserves-position-on-reload"
+  (setup
+    (create-scene))
+  
+  (actions
+    (move-camera (5 10 15) (0 0 0))
+    (wait 100)
+    (record-snapshot initial-position)
+    (trigger-hot-reload)
+    (wait 100)
+    (record-snapshot after-reload))
+  
+  (assertions
+    (assert-eq camera-position (5 10 15))
+    (assert-preserved camera)
+    (assert-no-errors)))
+
+(deftest "object-meta-directives-work"
+  (setup
+    (create-scene)
+    (create-object test-cube cube
+      (position -3 0 0)
+      (meta preserve-runtime)))
+  
+  (actions
+    (move-object test-cube (0 2 0))
+    (trigger-hot-reload))
+  
+  (assertions
+    (assert-eq test-cube-position (0 2 0))
+    (assert-preserved test-cube)))
+
+(defrecording-test "user-interaction-flow"
+  (recording-file "test-recordings/camera-movement.rec")
+  (playback-speed 2.0)
+  
+  (assertions
+    (assert-no-errors)
+    (assert-final-state expected-scene)))
+
+(defproperty "transformations-are-reversible"
+  (generators
+    (random-transform (range -10 10)))
+  
+  (invariant transform
+    (let ((original (get-object-state cube)))
+      (apply-transform cube transform)
+      (apply-transform cube (inverse transform))
+      (assert-eq (get-object-state cube) original))))
+
+(deftemporal-test "state-consistency-through-time"
+  (timeline
+    (branch main
+      (at 0 (create-object sphere))
+      (at 100 (modify-color red))
+      (at 200 (scale-by 2)))
+    
+    (branch alternate
+      (from 100
+        (modify-color blue)
+        (rotate-by 45))))
+  
+  (assertions
+    (at-all-times (assert-no-memory-leaks))
+    (at-branch-points (assert-deterministic))
+    (between-branches (assert-divergence-after 100))))

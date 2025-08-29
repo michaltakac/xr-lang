@@ -8,8 +8,12 @@ pub mod compute;
 pub mod math;
 pub mod render3d;
 pub mod ui3d;
+pub mod entity;
+pub mod mesh_gen;
 pub mod scene;
 pub mod gizmo;
+pub mod runtime_state;
+pub mod behavior_system;
 
 pub use device::*;
 pub use shader::*;

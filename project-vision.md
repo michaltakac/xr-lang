@@ -760,6 +760,289 @@ AI: [Generates macro from interaction]
      can parameterize. Should I add it to your pattern library?"
 ```
 
+## 3D Asset Pipeline & Model Support
+
+### Universal 3D Model Loading
+
+```lisp
+; Native support for industry-standard 3D formats
+(defscene3d model-showcase
+  ; Direct loading of 3D models
+  (model robot "assets/robot.glb"
+    (position 0 0 0)
+    (scale 1 1 1)
+    (behavior articulated-rig))
+    
+  (model terrain "assets/landscape.obj"
+    (position 0 -10 0)
+    (material pbr-realistic))
+    
+  (model scan "assets/statue.ply"
+    (position 5 0 0)
+    (point-cloud-mode true)
+    (point-size 2.0))
+    
+  (model cad-part "assets/engine.stl"
+    (position -5 0 0)
+    (material metallic))
+    
+  (model scene-graph "assets/full-scene.usd"
+    (position 0 0 -10)
+    (preserve-hierarchy true)
+    (animation-clip "idle")))
+```
+
+### AI-Enhanced Model Pipeline
+
+```lisp
+(defmacro ai-model-processor []
+  `(defbehavior model-intelligence
+     ; AI analyzes and enhances loaded models
+     (on-model-load (model-path)
+       (let* ((analysis (ai-analyze-3d-model model-path))
+              (suggestions (ai-suggest-optimizations analysis)))
+         
+         ; Auto-generate LODs
+         (when (:needs-lods analysis)
+           (generate-lod-chain model-path))
+         
+         ; AI-powered retopology
+         (when (:high-poly-count analysis)
+           (let ((optimized (ai-retopologize model-path)))
+             (suggest-replacement optimized)))
+         
+         ; Automatic rigging for animation
+         (when (and (:is-character analysis)
+                   (not (:has-skeleton analysis)))
+           (let ((auto-rig (ai-generate-skeleton model-path)))
+             (apply-auto-rig auto-rig)))
+         
+         ; Material inference
+         (when (:missing-materials analysis)
+           (let ((materials (ai-infer-materials-from-geometry)))
+             (apply-smart-materials materials)))))
+     
+     ; Real-time model generation from description
+     (on-voice "create a 3D model of *" (description)
+       (let* ((model-prompt (enhance-3d-prompt description))
+              (generated-model (ai-generate-3d-model model-prompt))
+              (format-options '(gltf obj usd stl ply)))
+         
+         ; Preview in world
+         (spawn-model-preview generated-model)
+         
+         ; Export options
+         (show-export-menu format-options)
+         
+         ; Save to source
+         (on-confirm (format)
+           (let ((path (export-model generated-model format)))
+             (update-source! `(model ,(gensym) ,path))))))))
+```
+
+### Model Format Converters & Processors
+
+```lisp
+(defsystem model-pipeline
+  ; Universal loader with format detection
+  (defn load-any-model [path]
+    (case (detect-format path)
+      (:gltf (load-gltf path))
+      (:glb (load-glb path))
+      (:obj (load-obj-with-mtl path))
+      (:stl (load-stl-binary-or-ascii path))
+      (:ply (load-ply-with-colors path))
+      (:usd (load-usd-with-layers path))
+      (:usdc (load-usdc-compressed path))
+      (:fbx (convert-and-load-fbx path))
+      (:dae (load-collada path))
+      (:3ds (load-3ds-legacy path))))
+  
+  ; Smart format conversion
+  (defn convert-model [source-path target-format]
+    (let* ((source-data (load-any-model source-path))
+           (optimizer (get-optimizer target-format))
+           (optimized (optimize-for-format source-data target-format)))
+      
+      ; Format-specific optimizations
+      (case target-format
+        (:usd (add-usd-metadata optimized))
+        (:gltf (add-draco-compression optimized))
+        (:stl (triangulate-for-printing optimized))
+        (:ply (preserve-point-attributes optimized)))
+      
+      (export-model optimized target-format)))
+  
+  ; Procedural model generation from primitives
+  (defn generate-compound-model [description]
+    (let ((csg-tree (parse-csg-description description)))
+      (compile-to-mesh csg-tree))))
+```
+
+### Point Cloud & Photogrammetry Support
+
+```lisp
+(defmacro point-cloud-system []
+  `(defsystem point-clouds
+     ; Load and visualize point clouds
+     (defn load-point-cloud [path]
+       (case (detect-point-format path)
+         (:ply (load-ply-points path))
+         (:las (load-lidar-data path))
+         (:e57 (load-e57-scan path))
+         (:xyz (load-ascii-points path))))
+     
+     ; AI-powered point cloud to mesh
+     (defn points-to-mesh [point-cloud]
+       (let* ((ai-reconstruction (ai-infer-surface point-cloud))
+              (mesh (poisson-reconstruction ai-reconstruction))
+              (textured (ai-generate-texture-from-colors mesh point-cloud)))
+         textured))
+     
+     ; Real-time photogrammetry
+     (behavior photogrammetry-capture
+       (state (captures [])
+              (point-cloud nil))
+       
+       (on-key "C"
+         (capture-frame! captures (get-camera)))
+       
+       (on-key "P"
+         (let ((cloud (process-photogrammetry captures)))
+           (set! point-cloud cloud)
+           (visualize-points cloud)))
+       
+       (on-key "M"
+         (when point-cloud
+           (let ((mesh (points-to-mesh point-cloud)))
+             (spawn-mesh mesh)
+             (export-option mesh)))))))
+```
+
+### USD/Hydra Integration for Complex Scenes
+
+```lisp
+(defsystem usd-pipeline
+  ; Full USD scene graph support
+  (defn load-usd-scene [path]
+    (let* ((stage (open-usd-stage path))
+           (prims (traverse-stage stage))
+           (materials (extract-materials stage))
+           (animations (extract-animations stage)))
+      
+      ; Convert to internal scene graph
+      (build-scene-graph prims materials animations)))
+  
+  ; Live USD editing
+  (behavior usd-editor
+    (on-modify (object)
+      (let ((usd-prim (get-usd-prim object)))
+        ; Write changes back to USD
+        (update-usd-attribute usd-prim (get-transform object))
+        
+        ; Maintain USD layer stack
+        (add-to-edit-layer (current-changes)))))
+  
+  ; AI-assisted USD composition
+  (defn ai-compose-usd-scene [description]
+    (let* ((scene-structure (ai-parse-scene-description description))
+           (asset-library (scan-usd-assets))
+           (composition (ai-compose-from-library scene-structure asset-library)))
+      
+      ; Generate USD with proper referencing
+      (create-usd-with-references composition))))
+```
+
+### 3D Model Streaming & LOD System
+
+```lisp
+(defsystem model-streaming
+  ; Progressive loading for large models
+  (defn stream-large-model [url]
+    (let ((loader (create-progressive-loader url)))
+      ; Load low-res first
+      (load-lod loader 0)
+      
+      ; Stream higher detail based on distance
+      (on-frame (dt)
+        (let ((distance (camera-distance-to-model)))
+          (when (< distance (lod-threshold))
+            (stream-next-lod loader))))))
+  
+  ; Automatic LOD generation
+  (defn generate-lods [model]
+    (let ((lod-chain []))
+      (for [level (range 5)]
+        (let ((simplified (simplify-mesh model (lod-ratio level))))
+          (push! lod-chain simplified)))
+      lod-chain))
+  
+  ; AI-powered LOD optimization
+  (defn ai-optimize-lods [model]
+    (let* ((importance-map (ai-analyze-visual-importance model))
+           (lods (ai-generate-smart-lods model importance-map)))
+      lods)))
+```
+
+### CAD & Engineering Format Support
+
+```lisp
+(defsystem cad-pipeline
+  ; STL for 3D printing
+  (defn prepare-for-printing [model]
+    (let* ((watertight (make-watertight model))
+           (supported (add-support-structures watertight))
+           (sliced (generate-slices supported)))
+      (export-stl sliced)))
+  
+  ; STEP/IGES import (via conversion)
+  (defn import-cad [path]
+    (let ((format (detect-cad-format path)))
+      (case format
+        (:step (convert-step-to-mesh path))
+        (:iges (convert-iges-to-mesh path))
+        (:stl (load-stl-direct path)))))
+  
+  ; Parametric modeling integration
+  (defn parametric-to-mesh [parameters]
+    (let ((cad-model (generate-parametric-model parameters)))
+      (tessellate-cad cad-model))))
+```
+
+### Model Analysis & Optimization
+
+```lisp
+(defmacro model-analyzer []
+  `(defsystem analysis
+     ; Comprehensive model analysis
+     (defn analyze-model [model]
+       {:poly-count (count-polygons model)
+        :vertex-count (count-vertices model)
+        :material-count (count-materials model)
+        :texture-memory (calculate-texture-memory model)
+        :bounding-box (calculate-bounds model)
+        :manifold (is-manifold? model)
+        :uv-coverage (analyze-uv-usage model)
+        :animation-data (analyze-animations model)})
+     
+     ; AI-powered optimization suggestions
+     (defn ai-optimize-model [model analysis]
+       (let ((suggestions []))
+         ; Topology optimization
+         (when (> (:poly-count analysis) 100000)
+           (push! suggestions (ai-suggest-retopology model)))
+         
+         ; Texture optimization
+         (when (> (:texture-memory analysis) (* 100 1024 1024))
+           (push! suggestions (ai-suggest-texture-compression model)))
+         
+         ; UV optimization
+         (when (< (:uv-coverage analysis) 0.7)
+           (push! suggestions (ai-suggest-uv-repack model)))
+         
+         suggestions))))
+```
+
 ## Key Innovations
 
 1. **AI as Co-Creator**: Not just a tool, but a collaborative partner
@@ -769,6 +1052,9 @@ AI: [Generates macro from interaction]
 5. **Multimodal Synthesis**: Voice, video, code, and 3D seamlessly integrated
 6. **Time as First-Class**: Navigate, branch, and understand causality
 7. **Symbiotic Evolution**: Human creativity + AI capabilities = emergent innovation
+8. **Universal 3D Asset Support**: Native loading of STL, PLY, OBJ, USD/USDC, glTF/GLB formats
+9. **AI-Enhanced Model Pipeline**: Automatic optimization, rigging, and material inference
+10. **Point Cloud & Photogrammetry**: Real-time reconstruction and mesh generation
 
 ## Key Benefits
 

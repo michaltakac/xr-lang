@@ -1,0 +1,26 @@
+[package]
+name = "xr-lang-testing"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+colored = "2.0"
+indicatif = "0.17"
+chrono = "0.4"
+
+# Internal dependencies
+dsl = { path = "../dsl" }
+gpu = { path = "../gpu" }
+vm = { path = "../vm" }
+ir = { path = "../ir" }
+
+# Test runner dependencies
+clap = { version = "4.5", features = ["derive"] }
+
+[dev-dependencies]
+proptest = "1.5"
+quickcheck = "1.0"

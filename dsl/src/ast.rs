@@ -50,6 +50,13 @@ pub struct Object3D {
     pub material: Option<MaterialDef>,
     pub behavior: Option<String>, // reference to behavior
     pub interactive: bool, // New field for making object interactively transformable
+    pub meta: Option<MetaDirective>, // Meta directives for preservation behavior
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaDirective {
+    pub preserve_mode: String, // "preserve-runtime", "sync-to-code", "reset-on-reload", "volatile"
+    pub properties: Vec<String>, // Which properties to preserve
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +74,7 @@ pub struct CameraDef {
     pub fov: f32,
     pub near: f32,
     pub far: f32,
+    pub meta: Option<MetaDirective>, // Meta directives for camera preservation
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

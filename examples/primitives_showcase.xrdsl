@@ -1,0 +1,151 @@
+; Showcase of all 3D primitive types
+; Demonstrates the full range of shapes available in XR-Lang
+
+(defbehavior float
+  (state 
+    (time 0.0)
+    (base-y 0.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y (+ base-y (* 0.5 (sin (* time 2.0)))))))
+
+(defbehavior spin-slow
+  (state (speed 0.5))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d primitives-showcase
+  (camera
+    (position 0 12 25)
+    (target 0 0 0)
+    (fov 50))
+    
+  (lighting
+    (ambient 0.4 0.4 0.5)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.0)))
+  
+  ; Row 1 - Basic shapes
+  (object demo-box box
+    (transform
+      (position -6 3 0)
+      (scale 1 1 1))
+    (material
+      (color 0.9 0.3 0.3))
+    (behavior spin-slow))
+    
+  (object demo-sphere sphere
+    (transform
+      (position -3 3 0)
+      (scale 1 1 1))
+    (material
+      (color 0.3 0.9 0.3))
+    (behavior spin-slow))
+    
+  (object demo-cylinder cylinder
+    (transform
+      (position 0 3 0)
+      (scale 1 1 1))
+    (material
+      (color 0.3 0.3 0.9))
+    (behavior spin-slow))
+    
+  (object demo-cone cone
+    (transform
+      (position 3 3 0)
+      (scale 1 1 1))
+    (material
+      (color 0.9 0.9 0.3))
+    (behavior spin-slow))
+    
+  (object demo-pyramid pyramid
+    (transform
+      (position 6 3 0)
+      (scale 1 1 1))
+    (material
+      (color 0.9 0.3 0.9))
+    (behavior spin-slow))
+    
+  ; Row 2 - Complex shapes
+  (object demo-wedge wedge
+    (transform
+      (position -6 0 0)
+      (scale 1 1 1))
+    (material
+      (color 0.3 0.9 0.9))
+    (behavior spin-slow))
+    
+  (object demo-torus torus
+    (transform
+      (position -3 0 0)
+      (scale 1 1 1))
+    (material
+      (color 0.5 0.7 0.9))
+    (behavior spin-slow))
+    
+  (object demo-capsule capsule
+    (transform
+      (position 0 0 0)
+      (scale 1 1 1))
+    (material
+      (color 0.9 0.5 0.3))
+    (behavior spin-slow))
+    
+  ; Row 3 - Polyhedra
+  (object demo-icosahedron icosahedron
+    (transform
+      (position 3 0 0)
+      (scale 1 1 1))
+    (material
+      (color 0.7 0.9 0.5))
+    (behavior spin-slow))
+    
+  (object demo-octahedron octahedron
+    (transform
+      (position 6 0 0)
+      (scale 1 1 1))
+    (material
+      (color 0.5 0.3 0.7))
+    (behavior spin-slow))
+    
+  (object demo-tetrahedron tetrahedron
+    (transform
+      (position -4.5 -3 0)
+      (scale 1 1 1))
+    (material
+      (color 0.9 0.7 0.5))
+    (behavior spin-slow))
+    
+  ; Ground plane
+  (object ground plane
+    (transform
+      (position 0 -5 0)
+      (scale 30 1 30))
+    (material
+      (color 0.3 0.3 0.35)))
+      
+  ; Floating elements
+  (object floating-sphere-1 sphere
+    (transform
+      (position -8 6 -3)
+      (scale 0.5 0.5 0.5))
+    (material
+      (color 1.0 0.8 0.3))
+    (behavior float))
+    
+  (object floating-sphere-2 sphere
+    (transform
+      (position 8 6 -3)
+      (scale 0.5 0.5 0.5))
+    (material
+      (color 0.3 0.8 1.0))
+    (behavior float))
+    
+  ; UI
+  (ui-element status-text text
+    (position 0 4 0)
+    (size 40 5)
+    (text "XR-Lang Primitives Showcase\nAll 3D primitive types with hot-swappable behaviors")
+    (color 1 1 1 0.9)))

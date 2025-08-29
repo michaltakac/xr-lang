@@ -77,6 +77,13 @@ async fn main() -> Result<()> {
     println!("🔥 HOT-RELOAD ACTIVE: Edit any .xrdsl file in examples/ to see live updates!");
     println!("✨ Live DSL compilation and 3D scene updates working!");
     println!("📌 TIP: Run with a scene file: cargo run -p desktop -- examples/rotation_test.xrdsl");
+    println!("");
+    println!("🆕 RUNTIME STATE PRESERVATION:");
+    println!("   Press [P] to toggle preservation modes: Design -> Play -> Live");
+    println!("   • Design: All changes reset on reload (default)");
+    println!("   • Play: Runtime changes preserved, not saved");
+    println!("   • Live: Runtime changes sync to code (future feature)");
+    println!("   Try: cargo run -p desktop -- examples/preserve_test.xrdsl");
     
     // Request the initial frame
     window.request_redraw();

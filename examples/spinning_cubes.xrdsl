@@ -2,9 +2,22 @@
 ; This demonstrates the 3D DSL syntax for creating interactive scenes
 
 (defbehavior somespin
-  (state (speed 1.0))
+  (state 
+    (speed 4.0)
+    (time 0.0)
+    (bounce-height 2.0))
   (update (dt)
-    (set! rotation.y (+ rotation.y (* speed dt)))))
+    ; Accumulate time for wave motion
+    (set! time (+ time dt))
+    ; Rotate around Y axis  
+    (set! rotation.y (+ rotation.y (* speed dt)))
+    ; Add bouncing motion on Y axis
+    (set! position.y (+ 1.0 (* bounce-height (sin (* time 3.0)))))
+    ; Pulse the scale
+    (let ((pulse (+ 1.0 (* 0.3 (cos (* time 5.0))))))
+      (set! scale.x pulse)
+      (set! scale.y pulse) 
+      (set! scale.z pulse))))
 
 (defscene3d demo-scene
   (camera

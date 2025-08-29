@@ -27,3 +27,6 @@ impl Default for World {
 
 pub mod hotswap;
 pub mod ffi;
+pub mod interpreter;
+
+pub use interpreter::*;

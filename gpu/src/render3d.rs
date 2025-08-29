@@ -3,6 +3,8 @@
 use crate::math::*;
 use crate::ui3d::UI3DSystem;
 use crate::scene::*;
+use crate::runtime_state::RuntimeState;
+use crate::behavior_system::BehaviorSystem;
 use wgpu::*;
 use wgpu::util::DeviceExt;
 use bytemuck::{Pod, Zeroable};
@@ -164,6 +166,8 @@ pub struct Renderer3D {
     pub keyboard_state: KeyboardState,
     pub mouse_state: MouseState,
     pub orbit_state: OrbitState,
+    pub runtime_state: RuntimeState,
+    pub behavior_system: BehaviorSystem,
 }
 
 pub struct OrbitState {
@@ -307,6 +311,8 @@ impl Renderer3D {
             orbit_state: OrbitState {
                 spherical_coords: (radius, theta, phi),
             },
+            runtime_state: RuntimeState::new(),
+            behavior_system: BehaviorSystem::new(),
         };
         
         // Initialize scene from default data
@@ -318,17 +324,38 @@ impl Renderer3D {
         self.meshes.push(mesh);
     }
     
-    pub fn load_scene(&mut self, scene_data: SceneData, device: &Device) {
-        println!("🔄 Loading new scene with {} cubes, {} UI elements", 
-            scene_data.cubes.len(), scene_data.ui_elements.len());
+    pub fn load_scene(&mut self, mut scene_data: SceneData, device: &Device) {
+        println!("🔄 Loading new scene with {} entities, {} UI elements", 
+            scene_data.entities.len(), scene_data.ui_elements.len());
+        
+        // Hot-swap behaviors from AST
+        if !scene_data.ast.is_empty() {
+            if let Err(e) = self.behavior_system.hot_swap_behaviors(&scene_data.ast) {
+                println!("⚠️ Failed to hot-swap behaviors: {}", e);
+                self.ui_system.add_log_entry(&format!("⚠️ Behavior hot-swap failed: {}", e));
+            } else {
+                self.ui_system.add_log_entry("✨ Behaviors hot-swapped!");
+            }
+        }
+        
+        // Extract current runtime state before loading new scene
+        if self.runtime_state.should_preserve_camera() {
+            self.runtime_state.preserve_camera(self.camera.position, self.camera_target, 
+                std::f32::consts::FRAC_PI_4); // TODO: Store FOV properly
+        }
+        
+        // Apply preserved state to new scene data
+        self.runtime_state.apply_to_scene(&mut scene_data);
+        
         self.scene_data = scene_data;
         self.rebuild_scene(device);
         
         // Update UI elements
         self.ui_system.update_ui_elements(self.scene_data.ui_elements.clone());
         
-        self.ui_system.add_log_entry(&format!("Scene reloaded with {} objects and {} UI elements", 
-            self.scene_data.cubes.len(), self.scene_data.ui_elements.len()));
+        self.ui_system.add_log_entry(&format!("Scene reloaded with {} entities, {} UI elements, {} behaviors", 
+            self.scene_data.entities.len(), self.scene_data.ui_elements.len(), 
+            self.behavior_system.behavior_ast.len()));
     }
     
     fn rebuild_scene(&mut self, device: &Device) {
@@ -336,13 +363,20 @@ impl Renderer3D {
         self.meshes.clear();
         
         // Create meshes from scene data
-        for cube_data in &self.scene_data.cubes {
-            let mut mesh = Mesh::cube(device);
-            mesh.transform.position = cube_data.position;
-            mesh.transform.scale = cube_data.scale;
+        for entity in &self.scene_data.entities {
+            // Create mesh based on entity's mesh source
+            let mut mesh = match &entity.mesh {
+                crate::entity::MeshSource::Primitive(primitive) => {
+                    // For now, create a cube for all primitives
+                    // TODO: Generate proper mesh for each primitive type
+                    Mesh::cube(device)
+                }
+                _ => Mesh::cube(device), // Fallback for models and procedural
+            };
             
-            // Reset rotation to avoid accumulating rotations on reload
-            mesh.transform.rotation = Quat::IDENTITY;
+            mesh.transform.position = entity.transform.position;
+            mesh.transform.scale = entity.transform.scale;
+            mesh.transform.rotation = entity.transform.rotation;
             
             self.meshes.push(mesh);
         }
@@ -402,25 +436,46 @@ impl Renderer3D {
             self.camera.update(Vec3::new(x, y, z), Vec3::ZERO, Vec3::Y);
         }
         
-        // Update mesh rotations based on scene data and behaviors
+        // Update mesh rotations using the behavior system
         for (i, mesh) in self.meshes.iter_mut().enumerate() {
-            if i < self.scene_data.cubes.len() {
-                let cube_data = &self.scene_data.cubes[i];
+            if i < self.scene_data.entities.len() {
+                let entity = &self.scene_data.entities[i];
                 
-                // Get rotation speed from behavior
-                let rotation_speed = if let Some(ref behavior_name) = cube_data.behavior {
-                    if let Some(behavior) = self.scene_data.behaviors.get(behavior_name) {
-                        behavior.state.get("speed").unwrap_or(&1.0) * dt
+                // Execute behavior if assigned
+                if let Some(ref behavior_name) = entity.behavior {
+                    let object_id = &entity.id;
+                    
+                    // Run the behavior through the interpreter
+                    if let Ok(update) = self.behavior_system.update_behavior(object_id, behavior_name, dt) {
+                        // Apply rotation delta if behavior computed one
+                        if let Some(rotation_delta) = update.rotation_delta {
+                            let rotation = Quat::from_axis_angle(Vec3::Y, rotation_delta);
+                            mesh.transform.rotation = rotation * mesh.transform.rotation;
+                        }
+                        
+                        // Apply absolute rotation if set
+                        if let Some(rotation) = update.rotation {
+                            mesh.transform.rotation = Quat::from_axis_angle(Vec3::Y, rotation);
+                        }
+                        
+                        // Apply position updates if any
+                        if let Some((x, y, z)) = update.position {
+                            mesh.transform.position = Vec3::new(x, y, z);
+                        }
+                        
+                        // Apply scale updates if any
+                        if let Some((x, y, z)) = update.scale {
+                            mesh.transform.scale = Vec3::new(x, y, z);
+                        }
                     } else {
-                        1.0 * dt
+                        // Fallback to simple rotation if behavior fails
+                        let rotation_speed = 1.0 * dt;
+                        let rotation_delta = Quat::from_axis_angle(Vec3::Y, rotation_speed);
+                        mesh.transform.rotation = rotation_delta * mesh.transform.rotation;
                     }
                 } else {
-                    0.0 // No rotation if no behavior
-                };
-                
-                // Apply rotation around Y axis using quaternion
-                let rotation_delta = Quat::from_axis_angle(Vec3::Y, rotation_speed);
-                mesh.transform.rotation = rotation_delta * mesh.transform.rotation;
+                    // No behavior - no rotation
+                }
             } else {
                 // Fallback for any extra meshes - rotate around Y
                 mesh.transform.rotation = Quat::from_axis_angle(Vec3::Y, self.time + i as f32);
@@ -527,6 +582,15 @@ impl Renderer3D {
     
     pub fn handle_keyboard_input(&mut self, event: &winit::event::KeyEvent, _device: &Device) {
         use winit::keyboard::{KeyCode, PhysicalKey};
+        
+        // Handle special preservation toggle key
+        if matches!(event.physical_key, PhysicalKey::Code(KeyCode::KeyP)) 
+            && matches!(event.state, winit::event::ElementState::Pressed) {
+            self.runtime_state.toggle_preservation_mode();
+            self.ui_system.add_log_entry(&format!("📌 Runtime preservation mode: {:?}", 
+                self.runtime_state.authoring_mode));
+            return;
+        }
         
         // Convert key event to string for matching with DSL configuration
         let key_str = match event.physical_key {

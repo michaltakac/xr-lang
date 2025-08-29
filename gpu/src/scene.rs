@@ -1,28 +1,20 @@
 //! Scene data structures for DSL-driven 3D scenes
 
 use crate::math::*;
+use crate::entity::{Entity, MetaDirective};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct SceneData {
-    pub cubes: Vec<CubeData>,
+    pub entities: Vec<Entity>,  // All entities in the scene (replaces cubes)
     pub ui_elements: Vec<UIElementData>,
     pub behaviors: HashMap<String, BehaviorData>,
     pub camera: Option<CameraData>,
     pub lighting: Option<LightingData>,
     pub input: Option<InputData>,
+    pub ast: Vec<dsl::ast::Top>,  // Store AST for hot-swapping
 }
 
-#[derive(Debug, Clone)]
-pub struct CubeData {
-    pub name: String,
-    pub position: Vec3,
-    pub scale: Vec3,
-    pub rotation: Quat,
-    pub color: Vec3,
-    pub behavior: Option<String>,
-    pub interactive: bool,  // New field for interactive behavior
-}
 
 #[derive(Debug, Clone)]
 pub struct BehaviorData {
@@ -35,6 +27,7 @@ pub struct CameraData {
     pub position: Vec3,
     pub target: Vec3,
     pub fov: f32,
+    pub meta: Option<MetaDirective>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +96,8 @@ pub struct RotationKeysData {
 
 impl Default for SceneData {
     fn default() -> Self {
+        use crate::entity::{Entity, PrimitiveType, MeshSource, Transform, Material};
+        
         let mut behaviors = HashMap::new();
         let mut spin_state = HashMap::new();
         spin_state.insert("speed".to_string(), 1.0);
@@ -111,32 +106,56 @@ impl Default for SceneData {
             state: spin_state,
         });
 
-        Self {
-            cubes: vec![
-                CubeData {
-                    name: "cube1".to_string(),
+        // Create default entities using various primitives
+        let entities = vec![
+            Entity {
+                id: "cube1".to_string(),
+                name: "cube1".to_string(),
+                mesh: MeshSource::Primitive(PrimitiveType::cube()),
+                transform: Transform {
                     position: Vec3::new(-2.0, 0.0, 0.0),
-                    scale: Vec3::ONE,
                     rotation: Quat::IDENTITY,
-                    color: Vec3::new(1.0, 0.5, 0.0),
-                    behavior: Some("spin".to_string()),
-                    interactive: false,
+                    scale: Vec3::ONE,
                 },
-                CubeData {
-                    name: "cube2".to_string(),
+                material: Material {
+                    color: [1.0, 0.5, 0.0, 1.0],
+                    ..Material::default()
+                },
+                behavior: Some("spin".to_string()),
+                children: Vec::new(),
+                parent: None,
+                components: Vec::new(),
+                meta: None,
+            },
+            Entity {
+                id: "sphere1".to_string(),
+                name: "sphere1".to_string(),
+                mesh: MeshSource::Primitive(PrimitiveType::sphere()),
+                transform: Transform {
                     position: Vec3::new(2.0, 0.0, 0.0),
-                    scale: Vec3::ONE,
                     rotation: Quat::IDENTITY,
-                    color: Vec3::new(0.0, 1.0, 0.5),
-                    behavior: Some("spin".to_string()),
-                    interactive: false,
+                    scale: Vec3::ONE,
                 },
-            ],
+                material: Material {
+                    color: [0.0, 1.0, 0.5, 1.0],
+                    ..Material::default()
+                },
+                behavior: Some("spin".to_string()),
+                children: Vec::new(),
+                parent: None,
+                components: Vec::new(),
+                meta: None,
+            },
+        ];
+
+        Self {
+            entities,
             ui_elements: vec![],
             behaviors,
             camera: None,
             lighting: None,
             input: None,
+            ast: Vec::new(),
         }
     }
 }

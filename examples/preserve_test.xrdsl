@@ -1,0 +1,63 @@
+;; Test scene for camera state preservation
+;; Press [P] to toggle preservation modes: Design -> Play -> Live
+;; In Play or Live mode, camera position is preserved on hot-reload
+
+(defbehavior spin
+  (state
+    (speed 2.0))
+  (update (dt)
+    (rotate-x (* speed dt))))
+
+(defscene3d preserve-test-scene
+  ;; Camera with preservation meta directive
+  (camera
+    (position 0 5 10)
+    (target 0 0 0)
+    (fov 60)
+    (meta preserve-runtime))  ;; This camera will preserve its position
+  
+  ;; Cube 1: preserves position only
+  (object cube1 cube
+    (position -3 1 0)
+    (scale 1 1 2)
+    (behavior spin)
+    (meta preserve-runtime (properties position)))
+  
+  ;; Cube 2: always resets on reload (default)
+  (object cube2 cube
+    (position 0 0 0)
+    (scale 1.5 2.5 1.5)
+    (behavior spin)
+    (meta reset-on-reload))
+  
+  ;; Cube 3: syncs changes back to code (when implemented)
+  (object cube3 cube
+    (position 3 0 0)
+    (scale 1 1 1)
+    (behavior spin)
+    (meta sync-to-code))
+  
+  ;; Input controls for testing
+  (input
+    (camera-controls
+      (move-speed 5.0)
+      (rotate-speed 1.0)
+      (movement-keys
+        (forward "W")
+        (backward "S")
+        (left "A")
+        (right "D")
+        (up "Space")
+        (down "Shift"))
+      (rotation-keys
+        (pitch-up "Up")
+        (pitch-down "Down")
+        (yaw-left "Left")
+        (yaw-right "Right"))
+      (orbit-controls
+        (enabled true)
+        (sensitivity 1.0)
+        (min-distance 2.0)
+        (max-distance 50.0)
+        (enable-zoom true)
+        (zoom-speed 1.0)))))

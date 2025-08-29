@@ -8,6 +8,7 @@ members = [
     "xr",
     "ai",
     "cv",
+    "testing",
     "app-hosts/desktop",
     "app-hosts/quest",
     "app-hosts/web"

@@ -108,8 +108,10 @@ impl SceneLoader {
                 
                 // Convert AST to scene data with error handling
                 match self.extract_scene_from_ast_with_validation(&ast) {
-                    Ok(Some(scene_data)) => {
+                    Ok(Some(mut scene_data)) => {
                         println!("✅ Scene conversion successful!");
+                        // Add the AST to the scene data for hot-swapping
+                        scene_data.ast = ast.clone();
                         return Ok(Some(scene_data));
                     }
                     Ok(None) => {
@@ -121,12 +123,13 @@ impl SceneLoader {
                         
                         // Since parsing worked but no Scene3D found, create default scene
                         let fallback_scene = gpu::SceneData {
-                            cubes: self.parse_cubes_from_raw_scene(),
+                            entities: Vec::new(),  // Empty entities for fallback
                             ui_elements: vec![],
                             behaviors: self.extract_behaviors_from_ast(&ast),
                             camera: None,
                             lighting: None,
                             input: None,
+                            ast: ast.clone(),
                         };
                         return Ok(Some(fallback_scene));
                     }
@@ -135,12 +138,13 @@ impl SceneLoader {
                         println!("🔧 Creating fallback scene with parsed behaviors");
                         
                         let fallback_scene = gpu::SceneData {
-                            cubes: self.parse_cubes_from_raw_scene(),
+                            entities: Vec::new(),  // Empty entities for fallback
                             ui_elements: vec![],
                             behaviors: self.extract_behaviors_from_ast(&ast),
                             camera: None,
                             lighting: None,
                             input: None,
+                            ast: ast.clone(),
                         };
                         return Ok(Some(fallback_scene));
                     }
@@ -171,12 +175,13 @@ impl SceneLoader {
                 
                 println!("🔧 Creating fallback scene due to parse error");
                 let fallback_scene = gpu::SceneData {
-                    cubes: self.parse_cubes_from_raw_scene(),
+                    entities: Vec::new(),  // Empty entities for fallback
                     ui_elements: vec![],
                     behaviors: std::collections::HashMap::new(),
                     camera: None,
                     lighting: None,
                     input: None,
+                    ast: Vec::new(),
                 };
                 return Ok(Some(fallback_scene));
             }
@@ -227,7 +232,7 @@ impl SceneLoader {
                     }
                 }
                 
-                let scene_data = self.convert_scene_to_data_with_validation(scene, &behaviors)?;
+                let scene_data = self.convert_scene_to_data_with_validation(scene, &behaviors, ast)?;
                 return Ok(Some(scene_data));
             }
         }
@@ -235,36 +240,50 @@ impl SceneLoader {
         Ok(None)
     }
     
-    fn convert_scene_to_data_with_validation(&self, scene: &dsl::ast::Scene3D, behaviors: &std::collections::HashMap<String, gpu::BehaviorData>) -> Result<gpu::SceneData> {
-        let mut cubes = Vec::new();
+    fn convert_scene_to_data_with_validation(&self, scene: &dsl::ast::Scene3D, behaviors: &std::collections::HashMap<String, gpu::BehaviorData>, ast: &[dsl::ast::Top]) -> Result<gpu::SceneData> {
+        let mut entities = Vec::new();
         let mut ui_elements = Vec::new();
         
         println!("🔧 Converting {} objects and {} UI elements to scene data", 
             scene.objects.len(), scene.ui_elements.len());
         
-        // Extract cube objects from scene
+        // Extract entities from scene
         for object in &scene.objects {
             println!("  Processing object: '{}' ({})", object.name, object.mesh_type);
             
-            if object.mesh_type == "cube" {
-                let cube = gpu::CubeData {
+            // Parse primitive type from mesh_type string
+            if let Some(primitive) = gpu::entity::PrimitiveType::from_type_string(&object.mesh_type) {
+                let meta = object.meta.as_ref().map(|m| gpu::entity::MetaDirective {
+                    preserve_mode: m.preserve_mode.clone(),
+                    properties: m.properties.clone(),
+                });
+                
+                let entity = gpu::entity::Entity {
+                    id: object.name.clone(),
                     name: object.name.clone(),
-                    position: gpu::Vec3::from(object.transform.position),
-                    scale: gpu::Vec3::from(object.transform.scale),
-                    rotation: gpu::Quat::IDENTITY,  // For now, using identity
-                    color: self.generate_color_for_cube(&object.name),
+                    mesh: gpu::entity::MeshSource::Primitive(primitive),
+                    transform: gpu::entity::Transform {
+                        position: gpu::Vec3::from(object.transform.position),
+                        rotation: gpu::Quat::IDENTITY,  // TODO: Parse rotation
+                        scale: gpu::Vec3::from(object.transform.scale),
+                    },
+                    material: gpu::entity::Material {
+                        color: [0.8, 0.8, 0.8, 1.0],  // TODO: Parse from material def
+                        ..gpu::entity::Material::default()
+                    },
                     behavior: object.behavior.clone(),
-                    interactive: object.interactive,
+                    children: Vec::new(),
+                    parent: None,
+                    components: Vec::new(),
+                    meta,
                 };
                 
-                println!("    ✓ Cube: pos({:.1}, {:.1}, {:.1}), scale({:.1}, {:.1}, {:.1}), behavior: {:?}", 
-                    cube.position.x, cube.position.y, cube.position.z,
-                    cube.scale.x, cube.scale.y, cube.scale.z,
-                    cube.behavior);
+                println!("    ✓ Entity '{}': type={:?}, pos({:.1}, {:.1}, {:.1}), behavior: {:?}", 
+                    entity.name, object.mesh_type,
+                    entity.transform.position.x, entity.transform.position.y, entity.transform.position.z,
+                    entity.behavior);
                 
-                cubes.push(cube);
-            } else if object.mesh_type == "plane" {
-                println!("    ⊡ Plane object '{}' - currently not rendered but parsed", object.name);
+                entities.push(entity);
             } else {
                 println!("    ⚠️ Unknown mesh type '{}' for object '{}'", object.mesh_type, object.name);
             }
@@ -276,10 +295,22 @@ impl SceneLoader {
                 cam.position[0], cam.position[1], cam.position[2],
                 cam.target[0], cam.target[1], cam.target[2],
                 cam.fov.to_degrees());
+            
+            let meta = cam.meta.as_ref().map(|m| gpu::entity::MetaDirective {
+                preserve_mode: m.preserve_mode.clone(),
+                properties: m.properties.clone(),
+            });
+            
+            if let Some(ref meta) = meta {
+                println!("    📌 Camera Meta: preserve_mode={}, properties={:?}", 
+                    meta.preserve_mode, meta.properties);
+            }
+            
             gpu::CameraData {
                 position: gpu::Vec3::from(cam.position),
                 target: gpu::Vec3::from(cam.target),
                 fov: cam.fov,
+                meta,
             }
         });
         
@@ -323,11 +354,7 @@ impl SceneLoader {
             ui_elements.push(ui_data);
         }
         
-        // If no cubes found, fall back to text parsing
-        if cubes.is_empty() {
-            println!("⚠️ No cubes found in Scene3D, falling back to text parsing");
-            cubes = self.parse_cubes_from_raw_scene();
-        }
+        // No fallback needed for entities
         
         // Convert input configuration
         let input = scene.input.as_ref().map(|input_def| {
@@ -368,16 +395,17 @@ impl SceneLoader {
             }
         });
         
-        println!("✅ Scene conversion complete: {} cubes, {} UI elements, {} behaviors", 
-            cubes.len(), ui_elements.len(), behaviors.len());
+        println!("✅ Scene conversion complete: {} entities, {} UI elements, {} behaviors", 
+            entities.len(), ui_elements.len(), behaviors.len());
         
         Ok(gpu::SceneData { 
-            cubes,
+            entities,
             ui_elements,
             behaviors: behaviors.clone(),
             camera,
             lighting,
             input,
+            ast: ast.to_vec(),
         })
     }
 
@@ -403,7 +431,7 @@ impl SceneLoader {
         // Second pass: extract scene
         for item in ast {
             if let dsl::ast::Top::Scene3D(scene) = item {
-                scene_data = Some(self.convert_scene_to_data(scene, &behaviors));
+                scene_data = Some(self.convert_scene_to_data(scene, &behaviors, ast));
                 break;
             }
         }
@@ -411,31 +439,54 @@ impl SceneLoader {
         scene_data
     }
     
-    fn convert_scene_to_data(&self, scene: &dsl::ast::Scene3D, behaviors: &std::collections::HashMap<String, gpu::BehaviorData>) -> gpu::SceneData {
-        let mut cubes = Vec::new();
+    fn convert_scene_to_data(&self, scene: &dsl::ast::Scene3D, behaviors: &std::collections::HashMap<String, gpu::BehaviorData>, ast: &[dsl::ast::Top]) -> gpu::SceneData {
+        let mut entities = Vec::new();
         
-        // Extract cube objects from scene
+        // Extract entities from scene
         for object in &scene.objects {
-            if object.mesh_type == "cube" {
-                let cube = gpu::CubeData {
+            if let Some(primitive) = gpu::entity::PrimitiveType::from_type_string(&object.mesh_type) {
+                let meta = object.meta.as_ref().map(|m| gpu::entity::MetaDirective {
+                    preserve_mode: m.preserve_mode.clone(),
+                    properties: m.properties.clone(),
+                });
+                
+                let entity = gpu::entity::Entity {
+                    id: object.name.clone(),
                     name: object.name.clone(),
-                    position: gpu::Vec3::from(object.transform.position),
-                    scale: gpu::Vec3::from(object.transform.scale),
-                    rotation: gpu::Quat::IDENTITY,  // For now, using identity
-                    color: self.generate_color_for_cube(&object.name),
+                    mesh: gpu::entity::MeshSource::Primitive(primitive),
+                    transform: gpu::entity::Transform {
+                        position: gpu::Vec3::from(object.transform.position),
+                        rotation: gpu::Quat::IDENTITY,
+                        scale: gpu::Vec3::from(object.transform.scale),
+                    },
+                    material: gpu::entity::Material {
+                        color: self.generate_color_for_entity(&object.name),
+                        ..gpu::entity::Material::default()
+                    },
                     behavior: object.behavior.clone(),
-                    interactive: object.interactive,
+                    children: Vec::new(),
+                    parent: None,
+                    components: Vec::new(),
+                    meta,
                 };
                 
-                cubes.push(cube);
+                entities.push(entity);
             }
         }
         
         // Parse camera if available
-        let camera = scene.camera.as_ref().map(|cam| gpu::CameraData {
-            position: gpu::Vec3::from(cam.position),
-            target: gpu::Vec3::from(cam.target),
-            fov: cam.fov,
+        let camera = scene.camera.as_ref().map(|cam| {
+            let meta = cam.meta.as_ref().map(|m| gpu::entity::MetaDirective {
+                preserve_mode: m.preserve_mode.clone(),
+                properties: m.properties.clone(),
+            });
+            
+            gpu::CameraData {
+                position: gpu::Vec3::from(cam.position),
+                target: gpu::Vec3::from(cam.target),
+                fov: cam.fov,
+                meta,
+            }
         });
         
         // Parse lighting if available
@@ -446,29 +497,28 @@ impl SceneLoader {
             directional_intensity: light.directional.as_ref().map_or(1.0, |d| d.intensity),
         });
         
-        // If no cubes found, fall back to text parsing
-        if cubes.is_empty() {
-            cubes = self.parse_cubes_from_raw_scene();
-        }
+        // No fallback needed for entities
         
         gpu::SceneData { 
-            cubes,
+            entities,
             ui_elements: vec![],
             behaviors: behaviors.clone(),
             camera,
             lighting,
             input: None,
+            ast: ast.to_vec(),
         }
     }
     
-    fn generate_color_for_cube(&self, name: &str) -> gpu::Vec3 {
-        // Generate consistent colors based on cube name
+    fn generate_color_for_entity(&self, name: &str) -> [f32; 4] {
+        // Generate consistent colors based on entity name
         let hash = name.chars().map(|c| c as u32).sum::<u32>();
-        gpu::Vec3::new(
+        [
             0.3 + ((hash * 17) % 100) as f32 / 150.0,
             0.3 + ((hash * 31) % 100) as f32 / 150.0,
             0.3 + ((hash * 43) % 100) as f32 / 150.0,
-        )
+            1.0,
+        ]
     }
     
     fn parse_vec3_from_transform(&self, transform: &dsl::ast::TransformDef, property: &str) -> Option<gpu::Vec3> {
@@ -481,110 +531,4 @@ impl SceneLoader {
         }
     }
     
-    fn parse_cubes_from_raw_scene(&self) -> Vec<gpu::CubeData> {
-        if let Some(ref content) = self.current_scene {
-            return self.parse_cubes_from_text(content);
-        }
-        
-        // Fallback to default cubes  
-        vec![
-            gpu::CubeData {
-                name: "cube1".to_string(),
-                position: gpu::Vec3::new(-3.0, 0.0, 0.0),
-                scale: gpu::Vec3::ONE,
-                rotation: gpu::Quat::IDENTITY,
-                color: gpu::Vec3::new(1.0, 0.2, 0.2), // Red
-                behavior: Some("spin".to_string()),
-                interactive: false,
-            },
-            gpu::CubeData {
-                name: "cube2".to_string(),
-                position: gpu::Vec3::new(0.0, 0.0, 0.0),
-                scale: gpu::Vec3::new(1.5, 1.5, 1.5),
-                rotation: gpu::Quat::IDENTITY,
-                color: gpu::Vec3::new(0.2, 1.0, 0.2), // Green
-                behavior: Some("spin".to_string()),
-                interactive: false,
-            },
-        ]
-    }
-    
-    fn parse_cubes_from_text(&self, content: &str) -> Vec<gpu::CubeData> {
-        let mut cubes = Vec::new();
-        let mut current_name = String::new();
-        let mut current_position = None;
-        let mut current_scale = None;
-        let mut current_behavior = None;
-        let mut parsing_object = false;
-        let mut object_is_cube = false;
-        
-        // Simple regex-like parsing for object definitions
-        for line in content.lines() {
-            let line = line.trim();
-            
-            if line.starts_with("(object") && line.contains("cube") {
-                parsing_object = true;
-                object_is_cube = true;
-                current_position = None;
-                current_scale = None;
-                current_behavior = None;
-                
-                // Extract object name
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    current_name = parts[1].to_string();
-                }
-            } else if parsing_object && line.starts_with("(position") {
-                if let Some(pos) = self.parse_vec3_from_line(line) {
-                    current_position = Some(pos);
-                }
-            } else if parsing_object && line.starts_with("(scale") {
-                if let Some(scale) = self.parse_vec3_from_line(line) {
-                    current_scale = Some(scale);
-                }
-            } else if parsing_object && line.starts_with("(behavior") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    current_behavior = Some(parts[1].replace(")", ""));
-                }
-            } else if parsing_object && line.contains(")") && !line.contains("(") {
-                // End of object definition
-                if object_is_cube {
-                    cubes.push(gpu::CubeData {
-                        name: if current_name.is_empty() { format!("cube{}", cubes.len() + 1) } else { current_name.clone() },
-                        position: current_position.unwrap_or(gpu::Vec3::ZERO),
-                        scale: current_scale.unwrap_or(gpu::Vec3::ONE),
-                        rotation: gpu::Quat::IDENTITY,
-                        color: gpu::Vec3::new(
-                            0.5 + (cubes.len() as f32 * 0.3) % 1.0,
-                            0.3 + (cubes.len() as f32 * 0.5) % 1.0,
-                            0.7 + (cubes.len() as f32 * 0.7) % 1.0,
-                        ),
-                        behavior: current_behavior.clone(),
-                        interactive: false,  // Default to false for text-parsed cubes
-                    });
-                }
-                parsing_object = false;
-                object_is_cube = false;
-            }
-        }
-        
-        println!("📦 Parsed {} cubes from raw text", cubes.len());
-        cubes
-    }
-    
-    fn parse_vec3_from_line(&self, line: &str) -> Option<gpu::Vec3> {
-        // Parse lines like "(position -4 0 0)" or "(scale 1.2 1.2 1.2)"
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 4 {
-            if let (Ok(x), Ok(y), Ok(z)) = (
-                parts[1].parse::<f32>(),
-                parts[2].parse::<f32>(),
-                parts[3].replace(")", "").parse::<f32>()
-            ) {
-                return Some(gpu::Vec3::new(x, y, z));
-            }
-        }
-        None
-    }
 }
