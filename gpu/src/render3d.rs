@@ -378,6 +378,156 @@ impl Renderer3D {
             self.behavior_system.behavior_ast.len()));
     }
     
+    pub fn apply_scene_changes(&mut self, mut scene_data: SceneData, changes: Vec<crate::reconciliation::SceneChange>, device: &Device) {
+        println!("⚡ Applying {} incremental changes", changes.len());
+        
+        let mut needs_full_rebuild = false;
+        let mut behavior_changes = false;
+        let mut model_reloads = Vec::new();
+        
+        // Process changes to determine what needs updating
+        for change in &changes {
+            match change {
+                crate::reconciliation::SceneChange::EntityAdded { entity } => {
+                    println!("  + Adding entity: {}", entity.name);
+                    // For now, trigger full rebuild for entity additions
+                    needs_full_rebuild = true;
+                }
+                crate::reconciliation::SceneChange::EntityRemoved { id } => {
+                    println!("  - Removing entity: {}", id);
+                    needs_full_rebuild = true;
+                }
+                crate::reconciliation::SceneChange::EntityModified { id, changes } => {
+                    println!("  ~ Modifying entity: {}", id);
+                    
+                    // Find the mesh index for this entity
+                    if let Some((mesh_idx, entity)) = self.scene_data.entities.iter().enumerate()
+                        .find(|(_, e)| e.id == *id) {
+                        
+                        if mesh_idx < self.meshes.len() {
+                            // Apply transform changes directly without rebuilding
+                            if let Some(ref transform) = changes.transform {
+                                self.meshes[mesh_idx].transform.position = transform.position;
+                                self.meshes[mesh_idx].transform.rotation = transform.rotation;
+                                self.meshes[mesh_idx].transform.scale = transform.scale;
+                                println!("    Updated transform");
+                            }
+                            
+                            // Material changes require shader updates (future optimization)
+                            if changes.material.is_some() {
+                                println!("    Material changed (full rebuild needed)");
+                                needs_full_rebuild = true;
+                            }
+                            
+                            // Mesh source changes require model reload
+                            if let Some(ref new_mesh) = changes.mesh {
+                                if let crate::entity::MeshSource::Model(model) = new_mesh {
+                                    model_reloads.push((mesh_idx, model.clone()));
+                                } else {
+                                    needs_full_rebuild = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                crate::reconciliation::SceneChange::BehaviorAdded { .. } |
+                crate::reconciliation::SceneChange::BehaviorModified { .. } |
+                crate::reconciliation::SceneChange::BehaviorRemoved { .. } => {
+                    behavior_changes = true;
+                }
+                crate::reconciliation::SceneChange::CameraChanged { .. } => {
+                    // Camera changes can be applied directly
+                    if let Some(ref camera_data) = scene_data.camera {
+                        if !self.runtime_state.should_preserve_camera() {
+                            self.camera_target = camera_data.target;
+                            self.camera = Camera::perspective(
+                                camera_data.position,
+                                camera_data.target,
+                                Vec3::Y,
+                                camera_data.fov,
+                                self.aspect_ratio,
+                                0.1,
+                                100.0,
+                            );
+                            println!("  📷 Camera updated");
+                        }
+                    }
+                }
+                crate::reconciliation::SceneChange::LightingChanged { .. } => {
+                    // Lighting changes will be handled when we have a lighting system
+                    println!("  💡 Lighting changed (not yet implemented)");
+                }
+                _ => {}
+            }
+        }
+        
+        // Hot-swap behaviors if changed
+        if behavior_changes && !scene_data.ast.is_empty() {
+            if let Err(e) = self.behavior_system.hot_swap_behaviors(&scene_data.ast) {
+                println!("⚠️ Failed to hot-swap behaviors: {}", e);
+                self.ui_system.add_log_entry(&format!("⚠️ Behavior hot-swap failed: {}", e));
+            } else {
+                self.ui_system.add_log_entry("✨ Behaviors hot-swapped!");
+                println!("  ✨ Behaviors hot-swapped");
+            }
+        }
+        
+        // Reload specific models without full rebuild
+        for (mesh_idx, model_source) in model_reloads {
+            match crate::model_loader::load_model(&model_source) {
+                Ok(mesh_data) => {
+                    let vertices: Vec<Vertex3D> = mesh_data.vertices.iter().map(|v| {
+                        Vertex3D::new(v.position, v.normal, v.tex_coords)
+                    }).collect();
+                    
+                    let indices: Vec<u16> = mesh_data.indices.iter().map(|&i| {
+                        if i > u16::MAX as u32 {
+                            u16::MAX
+                        } else {
+                            i as u16
+                        }
+                    }).collect();
+                    
+                    let old_transform = self.meshes[mesh_idx].transform.clone();
+                    self.meshes[mesh_idx] = Mesh::new(device, vertices, indices);
+                    self.meshes[mesh_idx].transform = old_transform;
+                    
+                    // Get path from ModelSource for logging
+                    let path_str = match model_source {
+                        crate::entity::ModelSource::GLTF { path } |
+                        crate::entity::ModelSource::GLB { path } |
+                        crate::entity::ModelSource::OBJ { path } |
+                        crate::entity::ModelSource::STL { path } |
+                        crate::entity::ModelSource::PLY { path } => path.display().to_string(),
+                        _ => "unknown".to_string(),
+                    };
+                    println!("    🔄 Reloaded model: {}", path_str);
+                }
+                Err(e) => {
+                    log::error!("Failed to reload model: {}", e);
+                }
+            }
+        }
+        
+        // Apply preserved state
+        self.runtime_state.apply_to_scene(&mut scene_data);
+        
+        // Update scene data
+        self.scene_data = scene_data;
+        
+        // Only rebuild if necessary
+        if needs_full_rebuild {
+            println!("  🔨 Full scene rebuild required");
+            self.rebuild_scene(device);
+        }
+        
+        // Update UI elements
+        self.ui_system.update_ui_elements(self.scene_data.ui_elements.clone());
+        
+        self.ui_system.add_log_entry(&format!("⚡ Applied {} changes (rebuild: {})", 
+            changes.len(), needs_full_rebuild));
+    }
+    
     fn rebuild_scene(&mut self, device: &Device) {
         // Clear existing meshes
         self.meshes.clear();

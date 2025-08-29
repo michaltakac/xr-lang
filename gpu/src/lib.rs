@@ -11,6 +11,7 @@ pub mod ui3d;
 pub mod entity;
 pub mod mesh_gen;
 pub mod model_loader;
+pub mod reconciliation;
 pub mod scene;
 pub mod gizmo;
 pub mod runtime_state;

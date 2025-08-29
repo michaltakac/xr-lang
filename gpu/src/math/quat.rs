@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use super::Vec3;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable, PartialEq)]
 pub struct Quat {
     pub x: f32,
     pub y: f32,

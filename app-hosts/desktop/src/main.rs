@@ -11,7 +11,7 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     dpi::PhysicalPosition,
 };
-use hotreload::{HotReloader, SceneLoader};
+use hotreload::{HotReloader, SceneLoader, SceneUpdate};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -57,8 +57,16 @@ async fn main() -> Result<()> {
     };
     
     if initial_scene.exists() {
-        if let Ok(Some(scene_data)) = scene_loader.load_scene_from_file(initial_scene.to_str().unwrap()) {
-            renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+        if let Ok(Some(update)) = scene_loader.load_scene_from_file(initial_scene.to_str().unwrap()) {
+            match update {
+                SceneUpdate::Full(scene_data) => {
+                    renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                }
+                SceneUpdate::Incremental { scene_data, .. } => {
+                    // For initial load, treat as full update
+                    renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                }
+            }
             println!("✅ Loaded initial scene from: {}", initial_scene.display());
         } else {
             println!("⚠️  Could not parse {}, using default scene", initial_scene.display());
@@ -139,8 +147,18 @@ async fn main() -> Result<()> {
                 // Check for hot-reload changes
                 if let Some(changed_file) = hot_reloader.check_for_changes() {
                     println!("📁 Detected change in: {}", changed_file);
-                    if let Ok(Some(new_scene)) = scene_loader.load_scene_from_file(&changed_file) {
-                        renderer_3d.load_scene(new_scene, &gpu_ctx.device);
+                    if let Ok(Some(update)) = scene_loader.load_scene_from_file(&changed_file) {
+                        match update {
+                            SceneUpdate::Full(scene_data) => {
+                                println!("🔄 Full scene reload");
+                                renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                            }
+                            SceneUpdate::Incremental { scene_data, changes } => {
+                                println!("⚡ Incremental update with {} changes", changes.len());
+                                // Apply incremental changes
+                                renderer_3d.apply_scene_changes(scene_data, changes, &gpu_ctx.device);
+                            }
+                        }
                     }
                 }
                 

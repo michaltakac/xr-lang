@@ -6,6 +6,15 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
+#[derive(Debug, Clone)]
+pub enum SceneUpdate {
+    Full(gpu::SceneData),
+    Incremental { 
+        scene_data: gpu::SceneData, 
+        changes: Vec<gpu::reconciliation::SceneChange> 
+    },
+}
+
 pub struct HotReloader {
     _watcher: RecommendedWatcher,
     pub receiver: Receiver<String>,
@@ -70,16 +79,20 @@ impl HotReloader {
 
 pub struct SceneLoader {
     current_scene: Option<String>,
+    reconciler: gpu::reconciliation::SceneReconciler,
+    last_scene_data: Option<gpu::SceneData>,
 }
 
 impl SceneLoader {
     pub fn new() -> Self {
         Self {
             current_scene: None,
+            reconciler: gpu::reconciliation::SceneReconciler::new(),
+            last_scene_data: None,
         }
     }
     
-    pub fn load_scene_from_file(&mut self, file_path: &str) -> Result<Option<gpu::SceneData>> {
+    pub fn load_scene_from_file(&mut self, file_path: &str) -> Result<Option<SceneUpdate>> {
         println!("🔄 Reloading scene from: {}", file_path);
         
         // Read the file
@@ -112,7 +125,47 @@ impl SceneLoader {
                         println!("✅ Scene conversion successful!");
                         // Add the AST to the scene data for hot-swapping
                         scene_data.ast = ast.clone();
-                        return Ok(Some(scene_data));
+                        
+                        // Perform reconciliation if we have a previous scene
+                        let update = if let Some(ref last_scene) = self.last_scene_data {
+                            let changes = self.reconciler.diff_scenes(last_scene, &scene_data);
+                            println!("🔍 Reconciliation found {} changes", changes.len());
+                            
+                            // Log changes for debugging
+                            for change in &changes {
+                                match change {
+                                    gpu::reconciliation::SceneChange::EntityAdded { entity } => {
+                                        println!("  + Entity added: {}", entity.name);
+                                    }
+                                    gpu::reconciliation::SceneChange::EntityRemoved { id } => {
+                                        println!("  - Entity removed: {}", id);
+                                    }
+                                    gpu::reconciliation::SceneChange::EntityModified { id, .. } => {
+                                        println!("  ~ Entity modified: {}", id);
+                                    }
+                                    gpu::reconciliation::SceneChange::BehaviorModified { name, .. } => {
+                                        println!("  ~ Behavior modified: {}", name);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            
+                            SceneUpdate::Incremental { scene_data, changes }
+                        } else {
+                            println!("📦 Initial scene load");
+                            SceneUpdate::Full(scene_data)
+                        };
+                        
+                        // Update stored scene
+                        if let SceneUpdate::Full(ref data) = update {
+                            self.last_scene_data = Some(data.clone());
+                            self.reconciler.update_current_scene(data.clone());
+                        } else if let SceneUpdate::Incremental { ref scene_data, .. } = update {
+                            self.last_scene_data = Some(scene_data.clone());
+                            self.reconciler.update_current_scene(scene_data.clone());
+                        }
+                        
+                        return Ok(Some(update));
                     }
                     Ok(None) => {
                         println!("⚠️ No valid Scene3D found in AST");
@@ -131,7 +184,17 @@ impl SceneLoader {
                             input: None,
                             ast: ast.clone(),
                         };
-                        return Ok(Some(fallback_scene));
+                        
+                        let update = if self.last_scene_data.is_some() {
+                            let changes = self.reconciler.diff_scenes(self.last_scene_data.as_ref().unwrap(), &fallback_scene);
+                            SceneUpdate::Incremental { scene_data: fallback_scene.clone(), changes }
+                        } else {
+                            SceneUpdate::Full(fallback_scene.clone())
+                        };
+                        
+                        self.last_scene_data = Some(fallback_scene.clone());
+                        self.reconciler.update_current_scene(fallback_scene);
+                        return Ok(Some(update));
                     }
                     Err(validation_error) => {
                         println!("❌ Scene validation failed: {}", validation_error);
@@ -146,7 +209,17 @@ impl SceneLoader {
                             input: None,
                             ast: ast.clone(),
                         };
-                        return Ok(Some(fallback_scene));
+                        
+                        let update = if self.last_scene_data.is_some() {
+                            let changes = self.reconciler.diff_scenes(self.last_scene_data.as_ref().unwrap(), &fallback_scene);
+                            SceneUpdate::Incremental { scene_data: fallback_scene.clone(), changes }
+                        } else {
+                            SceneUpdate::Full(fallback_scene.clone())
+                        };
+                        
+                        self.last_scene_data = Some(fallback_scene.clone());
+                        self.reconciler.update_current_scene(fallback_scene);
+                        return Ok(Some(update));
                     }
                 }
             }
@@ -183,7 +256,17 @@ impl SceneLoader {
                     input: None,
                     ast: Vec::new(),
                 };
-                return Ok(Some(fallback_scene));
+                
+                let update = if self.last_scene_data.is_some() {
+                    let changes = self.reconciler.diff_scenes(self.last_scene_data.as_ref().unwrap(), &fallback_scene);
+                    SceneUpdate::Incremental { scene_data: fallback_scene.clone(), changes }
+                } else {
+                    SceneUpdate::Full(fallback_scene.clone())
+                };
+                
+                self.last_scene_data = Some(fallback_scene.clone());
+                self.reconciler.update_current_scene(fallback_scene);
+                return Ok(Some(update));
             }
         }
     }
