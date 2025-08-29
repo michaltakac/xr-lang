@@ -369,6 +369,13 @@ impl SimpleUI3D {
         log::info!("3D UI Log: {}", message);
     }
     
+    pub fn resize(&mut self, _new_width: u32, _new_height: u32) {
+        // Update screen dimensions for UI rendering
+        // Note: SimpleUI3D doesn't currently store screen dimensions
+        // This method is here for future use when UI elements need to
+        // recalculate positions based on screen size changes
+    }
+    
     // Input handlers - simplified for demo
     pub fn handle_mouse_button(&mut self, _button: winit::event::MouseButton, _state: winit::event::ElementState) {
         // Mouse handling would go here

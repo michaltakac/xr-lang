@@ -1,0 +1,392 @@
+; XR-Lang Kitchen Sink Example
+; Showcases ALL implemented features, primitives, and models
+; This is a comprehensive demonstration of the system's capabilities
+
+; ============================================
+; BEHAVIORS - Hot-swappable and state-preserving
+; ============================================
+
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defbehavior float
+  (state 
+    (time 0.0)
+    (height 2.0)
+    (frequency 1.5))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y (+ 2.0 (* height (sin (* time frequency)))))))
+
+(defbehavior orbit
+  (state 
+    (angle 0.0)
+    (radius 3.0)
+    (speed 0.8)
+    (center-x 0.0)
+    (center-z 0.0))
+  (update (dt)
+    (set! angle (+ angle (* speed dt)))
+    (set! position.x (+ center-x (* radius (cos angle))))
+    (set! position.z (+ center-z (* radius (sin angle))))))
+
+(defbehavior pulse
+  (state 
+    (time 0.0)
+    (min-scale 0.8)
+    (max-scale 1.2)
+    (rate 2.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (let ((scale (+ min-scale (* (- max-scale min-scale) 
+                                 (/ (+ 1.0 (sin (* time rate))) 2.0)))))
+      (set! scale.x scale)
+      (set! scale.y scale)
+      (set! scale.z scale))))
+
+(defbehavior rainbow
+  (state 
+    (time 0.0)
+    (speed 0.5))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! color.r (/ (+ 1.0 (sin (* time speed))) 2.0))
+    (set! color.g (/ (+ 1.0 (sin (+ (* time speed) 2.094))) 2.0))
+    (set! color.b (/ (+ 1.0 (sin (+ (* time speed) 4.189))) 2.0))))
+
+; ============================================
+; MAIN SCENE - Kitchen Sink Demo
+; ============================================
+
+(defscene3d kitchen-sink-demo
+  ; Camera with runtime preservation
+  (camera
+    (position 0 15 30)
+    (target 0 0 0)
+    (fov 60)
+    (meta preserve-runtime))  ; Camera position preserved during hot-reload
+    
+  ; Input controls
+  (input
+    (camera-controls
+      (move-speed 10.0)
+      (rotate-speed 2.0)
+      (movement
+        (forward W)
+        (backward S)
+        (left A)
+        (right D)
+        (up Space)
+        (down Shift))
+      (rotation
+        (pitch-up Up)
+        (pitch-down Down)
+        (yaw-left Left)
+        (yaw-right Right))
+      (orbit-controls
+        (enabled true)
+        (sensitivity 1.0)
+        (damping 0.05)
+        (min-distance 2.0)
+        (max-distance 50.0)
+        (min-polar-angle 0.1)
+        (max-polar-angle 3.0)
+        (enable-zoom true)
+        (zoom-speed 1.0))))
+    
+  ; Lighting setup
+  (lighting
+    (ambient 0.3 0.3 0.4)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.2))
+    (directional
+      (direction -1 0.5 -1)
+      (color 0.5 0.6 0.8)
+      (intensity 0.5)))
+  
+  ; ============================================
+  ; SECTION 1: ALL PRIMITIVE TYPES
+  ; ============================================
+  
+  ; Row 1: Basic Primitives
+  (object prim-cube cube
+    (position -12 2 10)
+    (scale 1.5 1.5 1.5)
+    (color 0.8 0.2 0.2)
+    (behavior spin)
+    (meta preserve-runtime))
+    
+  (object prim-sphere sphere
+    (position -8 2 10)
+    (scale 1.5 1.5 1.5)
+    (color 0.2 0.8 0.2)
+    (behavior float))
+    
+  (object prim-cylinder cylinder
+    (position -4 2 10)
+    (scale 1.5 1.5 1.5)
+    (color 0.2 0.2 0.8)
+    (behavior pulse))
+    
+  (object prim-cone cone
+    (position 0 2 10)
+    (scale 1.5 1.5 1.5)
+    (color 0.8 0.8 0.2)
+    (behavior spin))
+    
+  (object prim-pyramid pyramid
+    (position 4 2 10)
+    (scale 1.5 1.5 1.5)
+    (color 0.8 0.2 0.8)
+    (behavior float))
+    
+  (object prim-wedge wedge
+    (position 8 2 10)
+    (scale 1.5 1.5 1.5)
+    (color 0.2 0.8 0.8)
+    (behavior orbit))
+    
+  ; Row 2: Advanced Primitives
+  (object prim-torus torus
+    (position -12 2 5)
+    (scale 1.5 1.5 1.5)
+    (color 0.5 0.5 0.8)
+    (behavior spin))
+    
+  (object prim-plane plane
+    (position -8 0.1 5)
+    (scale 3 1 3)
+    (color 0.3 0.3 0.3))
+    
+  (object prim-capsule capsule
+    (position -4 2 5)
+    (scale 1.5 1.5 1.5)
+    (color 0.8 0.5 0.2)
+    (behavior float))
+    
+  (object prim-icosahedron icosahedron
+    (position 0 2 5)
+    (scale 1.5 1.5 1.5)
+    (color 0.2 0.5 0.8)
+    (behavior pulse))
+    
+  (object prim-octahedron octahedron
+    (position 4 2 5)
+    (scale 1.5 1.5 1.5)
+    (color 0.8 0.2 0.5)
+    (behavior spin))
+    
+  (object prim-tetrahedron tetrahedron
+    (position 8 2 5)
+    (scale 1.5 1.5 1.5)
+    (color 0.5 0.8 0.2)
+    (behavior rainbow))
+    
+  ; Additional primitive: box (alias for cube)
+  (object prim-box box
+    (position 12 2 10)
+    (scale 1.5 1.5 1.5)
+    (color 0.6 0.4 0.8)
+    (behavior orbit))
+  
+  ; ============================================
+  ; SECTION 2: PLACEHOLDER FOR 3D MODELS 
+  ; ============================================
+  ; Note: Model loading syntax not yet implemented
+  ; Using cubes as placeholders for where models will load
+  
+  ; Placeholder for GLB Model - Teapot
+  (object model-placeholder-glb cube
+    (position -8 5 0)
+    (scale 2 2 2)
+    (color 0.9 0.7 0.5)
+    (behavior spin))
+    
+  ; Placeholder for OBJ Model - Teapot
+  (object model-placeholder-obj cube
+    (position -4 5 0)
+    (scale 2 2 2)
+    (color 0.7 0.5 0.3)
+    (behavior float))
+    
+  ; Placeholder for PLY Model - Teapot
+  (object model-placeholder-ply cube
+    (position 0 5 0)
+    (scale 2 2 2)
+    (color 0.5 0.7 0.9)
+    (behavior pulse))
+    
+  ; Placeholder for STL Model - Component
+  (object model-placeholder-stl cube
+    (position 4 5 0)
+    (scale 3 3 3)
+    (color 0.6 0.6 0.8)
+    (behavior rainbow))
+    
+  ; ============================================
+  ; SECTION 3: INTERACTIVE ELEMENTS
+  ; ============================================
+  
+  ; Interactive objects with gizmos (when implemented)
+  (object interactive-cube cube
+    (position -6 8 -5)
+    (scale 2 2 2)
+    (color 1.0 0.5 0.0)
+    (interactive true)
+    (meta preserve-runtime))
+    
+  (object interactive-sphere sphere
+    (position 0 8 -5)
+    (scale 2 2 2)
+    (color 0.0 1.0 0.5)
+    (interactive true)
+    (behavior orbit))
+    
+  (object interactive-cone cone
+    (position 6 8 -5)
+    (scale 2 2 2)
+    (color 0.5 0.0 1.0)
+    (interactive true)
+    (behavior spin))
+  
+  ; ============================================
+  ; SECTION 4: COMPLEX BEHAVIORS
+  ; ============================================
+  
+  ; Objects with multiple behaviors stacked
+  (object complex-cube-1 cube
+    (position -10 12 0)
+    (scale 1 1 1)
+    (color 0.9 0.1 0.1)
+    (behavior orbit)
+    (meta preserve-runtime))
+    
+  (object complex-sphere-1 sphere
+    (position 10 12 0)
+    (scale 1 1 1)
+    (color 0.1 0.9 0.1)
+    (behavior orbit))
+    
+  ; Orbiting chain
+  (object orbit-center cube
+    (position 0 15 -8)
+    (scale 0.5 0.5 0.5)
+    (color 1.0 1.0 0.0)
+    (behavior spin))
+    
+  (object orbit-child-1 sphere
+    (position 3 15 -8)
+    (scale 0.8 0.8 0.8)
+    (color 0.0 1.0 1.0)
+    (behavior orbit))
+    
+  (object orbit-child-2 cone
+    (position -3 15 -8)
+    (scale 0.8 0.8 0.8)
+    (color 1.0 0.0 1.0)
+    (behavior orbit))
+  
+  ; ============================================
+  ; SECTION 5: UI ELEMENTS
+  ; ============================================
+  
+  (ui-element title-text text
+    (position 10 10 0)
+    (size 600 100)
+    (text "XR-Lang Kitchen Sink Demo
+All Primitives • 3D Models • Behaviors • Hot-Reload
+Press [P] to toggle preservation mode")
+    (color 1.0 1.0 1.0 0.95))
+    
+  (ui-element primitive-label panel
+    (position 10 100 0)
+    (size 300 60)
+    (text "PRIMITIVES SECTION
+13 types: cube, sphere, cylinder, cone, pyramid, wedge,
+torus, plane, capsule, icosahedron, octahedron, tetrahedron, box")
+    (color 0.8 0.8 1.0 0.8))
+    
+  (ui-element model-label panel
+    (position 10 170 0)
+    (size 300 60)
+    (text "3D MODELS SECTION (Placeholders)
+Model loading coming soon!
+GLB, OBJ, PLY, STL formats planned")
+    (color 0.8 1.0 0.8 0.8))
+    
+  (ui-element behavior-label panel
+    (position 10 240 0)
+    (size 300 60)
+    (text "BEHAVIORS
+spin • float • orbit • pulse • rainbow
+All hot-swappable!")
+    (color 1.0 0.8 0.8 0.8))
+    
+  (ui-element instructions panel
+    (position 10 310 0)
+    (size 400 120)
+    (text "CONTROLS
+[WASD] Move camera • [Mouse] Look around
+[Space/Shift] Up/Down • [P] Toggle preservation
+[Scroll] Zoom • Click+Drag to orbit
+Edit this file and save to hot-reload!")
+    (color 1.0 1.0 0.8 0.9))
+    
+  (ui-element status-bar panel
+    (position 10 440 0)
+    (size 300 40)
+    (text "Status: Design Mode • Hot-Reload Active")
+    (color 0.2 0.2 0.2 0.9))
+  
+  ; ============================================
+  ; SECTION 6: GROUND PLANE & REFERENCE
+  ; ============================================
+  
+  ; Large ground plane
+  (object ground plane
+    (position 0 0 0)
+    (scale 50 1 50)
+    (color 0.2 0.2 0.25))
+    
+  ; Grid of reference cubes
+  (object ref-1 cube
+    (position -15 0.5 -15)
+    (scale 0.5 0.5 0.5)
+    (color 0.4 0.4 0.4))
+    
+  (object ref-2 cube
+    (position 15 0.5 -15)
+    (scale 0.5 0.5 0.5)
+    (color 0.4 0.4 0.4))
+    
+  (object ref-3 cube
+    (position -15 0.5 15)
+    (scale 0.5 0.5 0.5)
+    (color 0.4 0.4 0.4))
+    
+  (object ref-4 cube
+    (position 15 0.5 15)
+    (scale 0.5 0.5 0.5)
+    (color 0.4 0.4 0.4))
+    
+  ; Central marker
+  (object origin-marker pyramid
+    (position 0 0.5 0)
+    (scale 0.5 1 0.5)
+    (color 1.0 0.0 0.0))
+)
+
+; ============================================
+; NOTES FOR TESTING
+; ============================================
+; 1. Run with: cargo run -p desktop -- examples/kitchen_sink.xrdsl
+; 2. Press [P] to toggle preservation modes: Design → Play → Live
+; 3. Move camera and edit file to test hot-reload preservation
+; 4. Objects marked with (meta preserve-runtime) keep position
+; 5. Objects marked with (meta sync-to-code) write changes back
+; 6. All behaviors are hot-swappable - edit and save to see changes
+; 7. This file demonstrates ALL implemented features as of now

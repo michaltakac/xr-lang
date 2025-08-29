@@ -189,8 +189,8 @@ async fn main() -> Result<()> {
                 gpu_ctx.config.height = new_size.height.max(1);
                 gpu_ctx.surface.configure(&gpu_ctx.device, &gpu_ctx.config);
                 
-                // Update camera aspect ratio
-                renderer_3d.camera.set_aspect_ratio(new_size.width as f32 / new_size.height as f32);
+                // Update renderer with new dimensions
+                renderer_3d.resize(new_size.width, new_size.height);
             }
             _ => {}
         }

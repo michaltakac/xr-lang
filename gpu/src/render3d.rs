@@ -87,6 +87,26 @@ impl Mesh {
         }
     }
     
+    pub fn from_primitive(device: &Device, primitive: &crate::entity::PrimitiveType) -> Self {
+        // Generate mesh data using the mesh_gen module
+        let mesh_data = crate::mesh_gen::MeshData::from_primitive(primitive);
+        
+        // Convert mesh_gen vertices to Vertex3D
+        let vertices: Vec<Vertex3D> = mesh_data.vertices.iter().map(|v| {
+            Vertex3D::new(v.position, v.normal, v.tex_coords)
+        }).collect();
+        
+        // Convert u32 indices to u16 (with bounds checking)
+        let indices: Vec<u16> = mesh_data.indices.iter().map(|&i| {
+            if i > u16::MAX as u32 {
+                panic!("Index {} exceeds u16 max value", i);
+            }
+            i as u16
+        }).collect();
+        
+        Self::new(device, vertices, indices)
+    }
+    
     pub fn cube(device: &Device) -> Self {
         let vertices = vec![
             // Front face
@@ -367,9 +387,8 @@ impl Renderer3D {
             // Create mesh based on entity's mesh source
             let mut mesh = match &entity.mesh {
                 crate::entity::MeshSource::Primitive(primitive) => {
-                    // For now, create a cube for all primitives
-                    // TODO: Generate proper mesh for each primitive type
-                    Mesh::cube(device)
+                    // Generate proper mesh for each primitive type
+                    Mesh::from_primitive(device, primitive)
                 }
                 _ => Mesh::cube(device), // Fallback for models and procedural
             };
@@ -578,6 +597,30 @@ impl Renderer3D {
         
         // Render UI on top
         self.ui_system.render(device, queue, view, depth_view);
+    }
+    
+    pub fn resize(&mut self, new_width: u32, new_height: u32) {
+        // Update aspect ratio
+        self.aspect_ratio = new_width as f32 / new_height as f32;
+        
+        // Update camera projection matrix with new aspect ratio
+        self.camera.set_aspect_ratio(self.aspect_ratio);
+        
+        // If we have a scene with camera data, recreate the camera with the proper FOV and new aspect
+        if let Some(ref camera_data) = self.scene_data.camera {
+            self.camera = Camera::perspective(
+                self.camera.position,  // Keep current position (may be runtime-modified)
+                self.camera_target,     // Keep current target
+                Vec3::Y,
+                camera_data.fov,        // Use FOV from DSL
+                self.aspect_ratio,      // New aspect ratio
+                0.1,
+                100.0,
+            );
+        }
+        
+        // Update UI system with new dimensions
+        self.ui_system.resize(new_width, new_height);
     }
     
     pub fn handle_keyboard_input(&mut self, event: &winit::event::KeyEvent, _device: &Device) {
