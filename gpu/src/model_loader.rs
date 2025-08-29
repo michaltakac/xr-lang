@@ -13,7 +13,18 @@ pub fn load_model(source: &ModelSource) -> Result<MeshData> {
         ModelSource::STL { path } => load_stl(path),
         ModelSource::PLY { path } => load_ply(path),
         ModelSource::GLB { path } | ModelSource::GLTF { path } => load_gltf(path),
-        _ => Err(anyhow::anyhow!("Model format not yet supported")),
+        ModelSource::USD { .. } | ModelSource::USDC { .. } => {
+            // USD/USDZ support would require OpenUSD bindings which are complex
+            // and not readily available in Rust. Consider using:
+            // - usd-rs (experimental)
+            // - FFI bindings to Pixar's USD C++ library
+            // - Converting USD files to glTF using external tools
+            Err(anyhow::anyhow!("USD/USDZ format not yet supported. Please convert to glTF or OBJ."))
+        }
+        ModelSource::FBX { .. } => {
+            // FBX is a proprietary format requiring Autodesk FBX SDK
+            Err(anyhow::anyhow!("FBX format not yet supported. Please convert to glTF or OBJ."))
+        }
     }
 }
 
@@ -124,20 +135,168 @@ fn load_stl(path: &Path) -> Result<MeshData> {
     Ok(MeshData { vertices, indices })
 }
 
-/// Load a PLY model file (placeholder for now)
-fn load_ply(_path: &Path) -> Result<MeshData> {
-    // PLY loading would require additional dependencies or manual parsing
-    // For now, return a placeholder cube
-    log::warn!("PLY loading not yet implemented, returning placeholder cube");
-    Ok(MeshData::from_primitive(&crate::entity::PrimitiveType::cube()))
+/// Load a PLY model file
+fn load_ply(path: &Path) -> Result<MeshData> {
+    use ply_rs as ply;
+    
+    let mut file = File::open(path).context("Failed to open PLY file")?;
+    
+    // Parse PLY header and data
+    let parser = ply::parser::Parser::<ply::ply::DefaultElement>::new();
+    let ply_data = parser.read_ply(&mut file).context("Failed to parse PLY file")?;
+    
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    
+    // Extract vertices from PLY elements
+    for element in &ply_data.payload {
+        if element.0 == "vertex" {
+            for vertex_data in element.1.iter() {
+                let mut position = [0.0f32; 3];
+                let mut normal = [0.0f32, 1.0, 0.0]; // Default normal
+                
+                // Extract position (x, y, z)
+                if let Some(ply::ply::Property::Float(x)) = vertex_data.get("x") {
+                    position[0] = *x;
+                }
+                if let Some(ply::ply::Property::Float(y)) = vertex_data.get("y") {
+                    position[1] = *y;
+                }
+                if let Some(ply::ply::Property::Float(z)) = vertex_data.get("z") {
+                    position[2] = *z;
+                }
+                
+                // Extract normal if available (nx, ny, nz)
+                if let Some(ply::ply::Property::Float(nx)) = vertex_data.get("nx") {
+                    normal[0] = *nx;
+                }
+                if let Some(ply::ply::Property::Float(ny)) = vertex_data.get("ny") {
+                    normal[1] = *ny;
+                }
+                if let Some(ply::ply::Property::Float(nz)) = vertex_data.get("nz") {
+                    normal[2] = *nz;
+                }
+                
+                vertices.push(Vertex {
+                    position,
+                    normal,
+                    tex_coords: [0.0, 0.0], // PLY doesn't typically have texture coords
+                });
+            }
+        } else if element.0 == "face" {
+            // Extract face indices
+            for face_data in element.1.iter() {
+                if let Some(ply::ply::Property::ListUInt(vertex_indices)) = face_data.get("vertex_indices") {
+                    // Convert face to triangles (assuming triangulated mesh)
+                    if vertex_indices.len() >= 3 {
+                        for i in 1..vertex_indices.len() - 1 {
+                            indices.push(vertex_indices[0]);
+                            indices.push(vertex_indices[i]);
+                            indices.push(vertex_indices[i + 1]);
+                        }
+                    }
+                } else if let Some(ply::ply::Property::ListInt(vertex_indices)) = face_data.get("vertex_indices") {
+                    // Handle signed int indices
+                    if vertex_indices.len() >= 3 {
+                        for i in 1..vertex_indices.len() - 1 {
+                            indices.push(vertex_indices[0] as u32);
+                            indices.push(vertex_indices[i] as u32);
+                            indices.push(vertex_indices[i + 1] as u32);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Calculate normals if not provided
+    let has_normals = vertices.iter().any(|v| v.normal != [0.0, 1.0, 0.0]);
+    if !has_normals && !indices.is_empty() {
+        calculate_normals(&mut vertices, &indices);
+    }
+    
+    Ok(MeshData { vertices, indices })
 }
 
-/// Load a glTF/GLB model file (placeholder for now)
-fn load_gltf(_path: &Path) -> Result<MeshData> {
-    // glTF loading would require the gltf crate
-    // For now, return a placeholder cube
-    log::warn!("glTF/GLB loading not yet implemented, returning placeholder cube");
-    Ok(MeshData::from_primitive(&crate::entity::PrimitiveType::cube()))
+/// Load a glTF/GLB model file
+fn load_gltf(path: &Path) -> Result<MeshData> {
+    let (document, buffers, _images) = gltf::import(path)
+        .context("Failed to import glTF/GLB file")?;
+    
+    let mut all_vertices = Vec::new();
+    let mut all_indices = Vec::new();
+    let mut vertex_offset = 0u32;
+    
+    // Process all meshes in the glTF file
+    for mesh in document.meshes() {
+        // Process all primitives in the mesh
+        for primitive in mesh.primitives() {
+            let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+            
+            // Read vertex positions
+            let positions = reader.read_positions()
+                .context("glTF mesh has no vertex positions")?;
+            
+            // Read normals (if available)
+            let normals = reader.read_normals();
+            
+            // Read texture coordinates (if available)
+            let tex_coords = reader.read_tex_coords(0)
+                .map(|tc| tc.into_f32());
+            
+            // Combine vertex data
+            let vertex_count = positions.len();
+            let normals_vec: Vec<[f32; 3]> = if let Some(n) = normals {
+                n.collect()
+            } else {
+                vec![[0.0, 1.0, 0.0]; vertex_count]
+            };
+            
+            let tex_coords_vec: Vec<[f32; 2]> = if let Some(tc) = tex_coords {
+                tc.collect()
+            } else {
+                vec![[0.0, 0.0]; vertex_count]
+            };
+            
+            // Create vertices
+            for (i, position) in positions.enumerate() {
+                all_vertices.push(Vertex {
+                    position,
+                    normal: normals_vec.get(i).copied().unwrap_or([0.0, 1.0, 0.0]),
+                    tex_coords: tex_coords_vec.get(i).copied().unwrap_or([0.0, 0.0]),
+                });
+            }
+            
+            // Read indices
+            if let Some(indices_reader) = reader.read_indices() {
+                for index in indices_reader.into_u32() {
+                    all_indices.push(vertex_offset + index);
+                }
+            } else {
+                // If no indices, create them for triangle list
+                for i in 0..vertex_count as u32 {
+                    all_indices.push(vertex_offset + i);
+                }
+            }
+            
+            vertex_offset += vertex_count as u32;
+        }
+    }
+    
+    // Calculate normals if none were provided
+    let has_normals = all_vertices.iter().any(|v| v.normal != [0.0, 1.0, 0.0]);
+    if !has_normals && !all_indices.is_empty() {
+        calculate_normals(&mut all_vertices, &all_indices);
+    }
+    
+    if all_vertices.is_empty() {
+        return Err(anyhow::anyhow!("glTF file contains no mesh data"));
+    }
+    
+    Ok(MeshData { 
+        vertices: all_vertices, 
+        indices: all_indices 
+    })
 }
 
 /// Calculate smooth normals for vertices based on face connectivity
@@ -220,4 +379,14 @@ pub fn detect_format(path: &Path) -> Option<ModelSource> {
         "usdc" | "usdz" => Some(ModelSource::USDC { path: path_buf }),
         _ => None,
     }
+}
+
+/// Get list of supported model formats
+pub fn supported_formats() -> Vec<&'static str> {
+    vec!["obj", "stl", "ply", "gltf", "glb"]
+}
+
+/// Get list of formats that need conversion
+pub fn unsupported_formats() -> Vec<&'static str> {
+    vec!["fbx", "usd", "usda", "usdc", "usdz"]
 }

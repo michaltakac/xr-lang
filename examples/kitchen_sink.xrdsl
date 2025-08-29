@@ -196,36 +196,42 @@
   ; ============================================
   ; SECTION 2: 3D MODELS LOADED FROM FILES
   ; ============================================
-  ; Model loading is now implemented for STL and OBJ formats!
-  ; Model paths can be absolute or relative to the project root
+  ; Supported formats: OBJ, STL, PLY, glTF, GLB
+  ; USD/USDZ and FBX require conversion to supported formats
   
-  ; GLB Model - Teapot (placeholder - GLB not yet implemented)
-  (object model-glb-teapot cube
-    (position -8 5 0)
-    (scale 2 2 2)
-    (color 0.9 0.7 0.5)
-    (behavior spin))
+  ; GLB Model - Teapot (glTF binary format - now supported!)
+  (object model-glb-teapot assets/models/teapot.glb
+    (position -8 15 0)
+    (scale 10 10 10)
+    (color 0.9 0.7 0.5))
     
-  ; OBJ Model - Teapot (actual model loading!)
+  ; OBJ Model - Teapot (Wavefront OBJ)
   (object model-obj-teapot assets/models/teapot.obj
-    (position -4 5 0)
-    (scale 0.1 0.1 0.1)
+    (position -14 5 0)
+    (scale 1 1 1)
     (color 0.7 0.5 0.3)
     (behavior float))
     
-  ; PLY Model - Teapot (placeholder - PLY not yet implemented)
-  (object model-ply-teapot cube
+  ; PLY Model - Teapot (Stanford PLY format - now supported!)
+  (object model-ply-teapot assets/models/teapot.ply
     (position 0 5 0)
-    (scale 2 2 2)
+    (scale 0.05 0.05 0.05)
     (color 0.5 0.7 0.9)
     (behavior pulse))
     
-  ; STL Model - Component (actual model loading!)
+  ; STL Model - Component (STereoLithography format)
   (object model-stl-component assets/models/component.stl
-    (position 4 5 0)
-    (scale 0.01 0.01 0.01)
+    (position 10 5 0)
+    (scale 0.08 0.08 0.08)
     (color 0.6 0.6 0.8)
     (behavior rainbow))
+    
+  ; Additional test: Mixed primitives and models
+  (object mixed-test-1 sphere
+    (position 8 5 0)
+    (scale 1.5 1.5 1.5)
+    (color 1.0 0.3 0.3)
+    (behavior orbit))
     
   ; ============================================
   ; SECTION 3: INTERACTIVE ELEMENTS
@@ -314,8 +320,8 @@ torus, plane, capsule, icosahedron, octahedron, tetrahedron, box")
     (position 10 170 0)
     (size 300 60)
     (text "3D MODELS SECTION
-✓ STL and OBJ loading implemented!
-Loading teapot.obj and component.stl")
+✓ OBJ, STL, PLY, glTF, GLB supported!
+USD/FBX: Convert to glTF first")
     (color 0.8 1.0 0.8 0.8))
     
   (ui-element behavior-label panel
