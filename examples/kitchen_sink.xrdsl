@@ -297,9 +297,9 @@
   (ui-element title-text text
     (position 10 10 0)
     (size 600 100)
-    (text "XR-Lang Kitchen Sink Demo
-All Primitives • 3D Models • Behaviors • Hot-Reload
-Press [P] to toggle preservation mode")
+    (text "★ XR-Lang Kitchen Sink Demo ★
+All Primitives • 3D Models • Behaviors • Hot-Reload ✓
+Press [P] to toggle preservation mode → Live")
     (color 1.0 1.0 1.0 0.95))
     
   (ui-element primitive-label panel
@@ -321,25 +321,25 @@ GLB, OBJ, PLY, STL formats planned")
   (ui-element behavior-label panel
     (position 10 240 0)
     (size 300 60)
-    (text "BEHAVIORS
-spin • float • orbit • pulse • rainbow
-All hot-swappable!")
+    (text "✨ BEHAVIORS ✨
+spin → float → orbit → pulse → rainbow
+♦ All hot-swappable! ♦")
     (color 1.0 0.8 0.8 0.8))
     
   (ui-element instructions panel
     (position 10 310 0)
     (size 400 120)
-    (text "CONTROLS
-[WASD] Move camera • [Mouse] Look around
-[Space/Shift] Up/Down • [P] Toggle preservation
-[Scroll] Zoom • Click+Drag to orbit
-Edit this file and save to hot-reload!")
+    (text "⌨ CONTROLS ⌨
+[W↑A←S↓D→] Move camera • [Mouse] Look around
+[Space⬆/Shift⬇] Up/Down • [P] Toggle preservation
+[Scroll±] Zoom • Click+Drag to orbit ↻
+✓ Edit this file and save to hot-reload!")
     (color 1.0 1.0 0.8 0.9))
     
   (ui-element status-bar panel
     (position 10 440 0)
     (size 300 40)
-    (text "Status: Design Mode • Hot-Reload Active")
+    (text "Status: Design Mode ★ Hot-Reload Active ✓")
     (color 0.2 0.2 0.2 0.9))
   
   ; ============================================

@@ -66,8 +66,8 @@ impl TextRenderer3D {
         available_fonts.insert("DroidSans".to_string(), DROID_SANS.to_vec());
         available_fonts.insert("DroidSansMono".to_string(), DROID_SANS_MONO.to_vec());
         
-        // Load default font (Hack-Regular)
-        let font_data = HACK_REGULAR.to_vec();
+        // Load default font (DroidSans has good Unicode coverage)
+        let font_data = DROID_SANS.to_vec();
         let font = Font::try_from_bytes(&font_data)
             .expect("Failed to load default font");
         
@@ -245,7 +245,7 @@ impl TextRenderer3D {
         // Calculate atlas size needed - optimized for performance
         let sdf_padding = 6; // Balanced padding for quality and speed
         let padding = 2;     // Standard padding between glyphs
-        let chars_per_row = 16;
+        let chars_per_row = 20; // More chars per row for Unicode
         let cell_size = (font_size * 1.3) as u32 + (padding + sdf_padding) * 2;  // Reasonable space per glyph
         let atlas_size = cell_size * chars_per_row;
         
@@ -255,14 +255,35 @@ impl TextRenderer3D {
         // Create texture data
         let mut atlas_data = vec![0u8; (atlas_size * atlas_size * 4) as usize];
         
-        // Rasterize glyphs for printable ASCII characters using rusttype
-        let mut rasterized_count = 0;
-        log::info!("Starting glyph rasterization for {} characters", ('~' as u32 - ' ' as u32 + 1));
+        // Build list of characters to rasterize
+        let mut chars_to_rasterize = Vec::new();
+        
+        // Add ASCII characters
         for ch in ' '..='~' {
+            chars_to_rasterize.push(ch);
+        }
+        
+        // Add common UTF-8 characters
+        let utf8_chars = [
+            '•', '→', '←', '↑', '↓', '€', '£', '¥', '©', '®', '™', '°', '±', '×', '÷',
+            '✓', '✗', '★', '☆', '♦', '♠', '♣', '♥', '…', '—', '–', '"', '"', '\u{2018}', '\u{2019}',
+            'À', 'Á', 'È', 'É', 'Ì', 'Í', 'Ò', 'Ó', 'Ù', 'Ú', 'à', 'á', 'è', 'é', 'ì', 'í', 'ò', 'ó', 'ù', 'ú',
+            'Ä', 'Ë', 'Ï', 'Ö', 'Ü', 'ä', 'ë', 'ï', 'ö', 'ü', 'ß', 'Ñ', 'ñ', 'Ç', 'ç'
+        ];
+        for ch in utf8_chars.iter() {
+            chars_to_rasterize.push(*ch);
+        }
+        
+        // Rasterize glyphs using rusttype
+        let mut rasterized_count = 0;
+        log::info!("Starting glyph rasterization for {} characters", chars_to_rasterize.len());
+        
+        for (idx, ch) in chars_to_rasterize.iter().enumerate() {
+            let ch = *ch;
             let glyph = font.glyph(ch).scaled(scale);
             
-            // Calculate position in atlas
-            let index = (ch as u32) - 32;
+            // Calculate position in atlas based on index in our list
+            let index = idx as u32;
             let row = index / chars_per_row;
             let col = index % chars_per_row;
             let x_offset = col * cell_size + padding;
@@ -272,6 +293,10 @@ impl TextRenderer3D {
             let glyph = glyph.positioned(point(0.0, 0.0));
             
             if let Some(bounding_box) = glyph.pixel_bounding_box() {
+                // Log UTF-8 characters to debug
+                if ch > '\u{007F}' {
+                    log::debug!("Rasterizing UTF-8 character '{}' at row={}, col={}", ch, row, col);
+                }
                 // Calculate proper glyph dimensions
                 let glyph_width = (bounding_box.max.x - bounding_box.min.x) as u32;
                 let glyph_height = (bounding_box.max.y - bounding_box.min.y) as u32;
@@ -358,6 +383,9 @@ impl TextRenderer3D {
                     size: (space_width, font_size),
                     offset: (0.0, 0.0),
                 });
+            } else if ch > '\u{007F}' {
+                // Log UTF-8 characters that couldn't be rasterized
+                log::warn!("Failed to rasterize UTF-8 character '{}' (U+{:04X})", ch, ch as u32);
             }
         }
         
@@ -464,15 +492,35 @@ impl TextRenderer3D {
                 continue;
             }
             
-            if let Some(glyph_info) = self.glyph_cache.get(&ch) {
+            // Try to get the glyph, or use a fallback character if not found
+            let (glyph_info, used_fallback) = if let Some(info) = self.glyph_cache.get(&ch) {
+                (info, false)
+            } else if ch > '\u{007F}' {
+                // For missing UTF-8 characters, use a placeholder
+                if let Some(info) = self.glyph_cache.get(&'?') {
+                    (info, true)
+                } else {
+                    continue; // Skip if we can't even find '?'
+                }
+            } else {
+                continue; // Skip unknown ASCII chars
+            };
+            
+            if used_fallback && ch != ' ' {
+                log::debug!("Using fallback '?' for missing character '{}' (U+{:04X})", ch, ch as u32);
+            }
+            
+            if true {  // Changed from if let Some to work with the new logic
                 let base_idx = vertices.len() as u16;
                 
                 let width = glyph_info.size.0 * scale;
                 let height = glyph_info.size.1 * scale;
                 
-                // Calculate vertex positions relative to transform
+                // Calculate vertex positions with consistent baseline
+                // Use a fixed baseline offset to prevent characters from jumping
+                let baseline_offset = self.font_size * scale * 0.8;
                 let x = cursor_x + glyph_info.offset.0 * scale;
-                let y = cursor_y + glyph_info.offset.1 * scale;
+                let y = cursor_y + baseline_offset - (glyph_info.offset.1 * scale + height);
                 
                 let pos_tl = transform.position + Vec3::new(x, y + height, 0.0);
                 let pos_tr = transform.position + Vec3::new(x + width, y + height, 0.0);
@@ -511,9 +559,6 @@ impl TextRenderer3D {
                 
                 // Advance cursor
                 cursor_x += width;
-            } else if ch == ' ' {
-                // Handle space character
-                cursor_x += self.font_size * scale * 0.5;
             }
         }
         
