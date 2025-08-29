@@ -1,7 +1,7 @@
-//! Mesh generation for 3D primitives
+//! Mesh generation for 3D primitives and model loading
 
 use crate::math::*;
-use crate::entity::PrimitiveType;
+use crate::entity::{PrimitiveType, MeshSource};
 
 /// Vertex data for mesh generation
 #[repr(C)]
@@ -19,6 +19,21 @@ pub struct MeshData {
 }
 
 impl MeshData {
+    /// Generate mesh data from a mesh source (primitive or model)
+    pub fn from_source(source: &MeshSource) -> anyhow::Result<Self> {
+        match source {
+            MeshSource::Primitive(primitive) => Ok(Self::from_primitive(primitive)),
+            MeshSource::Model(model_source) => {
+                // Use the model loader to load external models
+                crate::model_loader::load_model(model_source)
+            }
+            MeshSource::Procedural { .. } => {
+                // Procedural generation not yet implemented
+                Err(anyhow::anyhow!("Procedural mesh generation not yet implemented"))
+            }
+        }
+    }
+    
     /// Generate mesh data for a primitive type
     pub fn from_primitive(primitive: &PrimitiveType) -> Self {
         match primitive {
@@ -514,7 +529,6 @@ impl MeshData {
     pub fn generate_capsule(radius: f32, height: f32, segments: u32) -> Self {
         // A capsule is a cylinder with hemisphere caps
         // For simplicity, we'll reuse sphere generation for caps
-        let mut vertices: Vec<Vertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
         
         // Generate cylinder middle part

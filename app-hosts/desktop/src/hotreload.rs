@@ -251,42 +251,56 @@ impl SceneLoader {
         for object in &scene.objects {
             println!("  Processing object: '{}' ({})", object.name, object.mesh_type);
             
-            // Parse primitive type from mesh_type string
-            if let Some(primitive) = gpu::entity::PrimitiveType::from_type_string(&object.mesh_type) {
-                let meta = object.meta.as_ref().map(|m| gpu::entity::MetaDirective {
-                    preserve_mode: m.preserve_mode.clone(),
-                    properties: m.properties.clone(),
-                });
-                
-                let entity = gpu::entity::Entity {
-                    id: object.name.clone(),
-                    name: object.name.clone(),
-                    mesh: gpu::entity::MeshSource::Primitive(primitive),
-                    transform: gpu::entity::Transform {
-                        position: gpu::Vec3::from(object.transform.position),
-                        rotation: gpu::Quat::IDENTITY,  // TODO: Parse rotation
-                        scale: gpu::Vec3::from(object.transform.scale),
-                    },
-                    material: gpu::entity::Material {
-                        color: [0.8, 0.8, 0.8, 1.0],  // TODO: Parse from material def
-                        ..gpu::entity::Material::default()
-                    },
-                    behavior: object.behavior.clone(),
-                    children: Vec::new(),
-                    parent: None,
-                    components: Vec::new(),
-                    meta,
-                };
-                
-                println!("    ✓ Entity '{}': type={:?}, pos({:.1}, {:.1}, {:.1}), behavior: {:?}", 
-                    entity.name, object.mesh_type,
-                    entity.transform.position.x, entity.transform.position.y, entity.transform.position.z,
-                    entity.behavior);
-                
-                entities.push(entity);
+            // Determine mesh source - either a primitive or a model file
+            let mesh_source = if let Some(primitive) = gpu::entity::PrimitiveType::from_type_string(&object.mesh_type) {
+                // It's a primitive
+                gpu::entity::MeshSource::Primitive(primitive)
+            } else if object.mesh_type.contains('.') {
+                // It looks like a file path - detect format and create model source
+                let path = std::path::PathBuf::from(&object.mesh_type);
+                if let Some(model_source) = gpu::model_loader::detect_format(&path) {
+                    gpu::entity::MeshSource::Model(model_source)
+                } else {
+                    println!("  ⚠️ Unknown model format for: {}", object.mesh_type);
+                    continue; // Skip this object
+                }
             } else {
-                println!("    ⚠️ Unknown mesh type '{}' for object '{}'", object.mesh_type, object.name);
-            }
+                println!("  ⚠️ Unknown mesh type: {}", object.mesh_type);
+                continue; // Skip this object
+            };
+            
+            // Now create the entity with the determined mesh source
+            let meta = object.meta.as_ref().map(|m| gpu::entity::MetaDirective {
+                preserve_mode: m.preserve_mode.clone(),
+                properties: m.properties.clone(),
+            });
+            
+            let entity = gpu::entity::Entity {
+                id: object.name.clone(),
+                name: object.name.clone(),
+                mesh: mesh_source,
+                transform: gpu::entity::Transform {
+                    position: gpu::Vec3::from(object.transform.position),
+                    rotation: gpu::Quat::IDENTITY,  // TODO: Parse rotation
+                    scale: gpu::Vec3::from(object.transform.scale),
+                },
+                material: gpu::entity::Material {
+                    color: [0.8, 0.8, 0.8, 1.0],  // TODO: Parse from material def
+                    ..gpu::entity::Material::default()
+                },
+                behavior: object.behavior.clone(),
+                children: Vec::new(),
+                parent: None,
+                components: Vec::new(),
+                meta,
+            };
+            
+            println!("    ✓ Entity '{}': type={:?}, pos({:.1}, {:.1}, {:.1}), behavior: {:?}", 
+                entity.name, object.mesh_type,
+                entity.transform.position.x, entity.transform.position.y, entity.transform.position.z,
+                entity.behavior);
+            
+            entities.push(entity);
         }
         
         // Parse camera if available
@@ -444,7 +458,23 @@ impl SceneLoader {
         
         // Extract entities from scene
         for object in &scene.objects {
-            if let Some(primitive) = gpu::entity::PrimitiveType::from_type_string(&object.mesh_type) {
+            // Determine mesh source - either a primitive or a model file
+            let mesh_source = if let Some(primitive) = gpu::entity::PrimitiveType::from_type_string(&object.mesh_type) {
+                // It's a primitive
+                gpu::entity::MeshSource::Primitive(primitive)
+            } else if object.mesh_type.contains('.') {
+                // It looks like a file path - detect format and create model source
+                let path = std::path::PathBuf::from(&object.mesh_type);
+                if let Some(model_source) = gpu::model_loader::detect_format(&path) {
+                    gpu::entity::MeshSource::Model(model_source)
+                } else {
+                    continue; // Skip unknown formats
+                }
+            } else {
+                continue; // Skip unknown mesh types
+            };
+            
+            {
                 let meta = object.meta.as_ref().map(|m| gpu::entity::MetaDirective {
                     preserve_mode: m.preserve_mode.clone(),
                     properties: m.properties.clone(),
@@ -453,7 +483,7 @@ impl SceneLoader {
                 let entity = gpu::entity::Entity {
                     id: object.name.clone(),
                     name: object.name.clone(),
-                    mesh: gpu::entity::MeshSource::Primitive(primitive),
+                    mesh: mesh_source,
                     transform: gpu::entity::Transform {
                         position: gpu::Vec3::from(object.transform.position),
                         rotation: gpu::Quat::IDENTITY,

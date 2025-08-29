@@ -194,36 +194,36 @@
     (behavior orbit))
   
   ; ============================================
-  ; SECTION 2: PLACEHOLDER FOR 3D MODELS 
+  ; SECTION 2: 3D MODELS LOADED FROM FILES
   ; ============================================
-  ; Note: Model loading syntax not yet implemented
-  ; Using cubes as placeholders for where models will load
+  ; Model loading is now implemented for STL and OBJ formats!
+  ; Model paths can be absolute or relative to the project root
   
-  ; Placeholder for GLB Model - Teapot
-  (object model-placeholder-glb cube
+  ; GLB Model - Teapot (placeholder - GLB not yet implemented)
+  (object model-glb-teapot cube
     (position -8 5 0)
     (scale 2 2 2)
     (color 0.9 0.7 0.5)
     (behavior spin))
     
-  ; Placeholder for OBJ Model - Teapot
-  (object model-placeholder-obj cube
+  ; OBJ Model - Teapot (actual model loading!)
+  (object model-obj-teapot assets/models/teapot.obj
     (position -4 5 0)
-    (scale 2 2 2)
+    (scale 0.1 0.1 0.1)
     (color 0.7 0.5 0.3)
     (behavior float))
     
-  ; Placeholder for PLY Model - Teapot
-  (object model-placeholder-ply cube
+  ; PLY Model - Teapot (placeholder - PLY not yet implemented)
+  (object model-ply-teapot cube
     (position 0 5 0)
     (scale 2 2 2)
     (color 0.5 0.7 0.9)
     (behavior pulse))
     
-  ; Placeholder for STL Model - Component
-  (object model-placeholder-stl cube
+  ; STL Model - Component (actual model loading!)
+  (object model-stl-component assets/models/component.stl
     (position 4 5 0)
-    (scale 3 3 3)
+    (scale 0.01 0.01 0.01)
     (color 0.6 0.6 0.8)
     (behavior rainbow))
     
@@ -313,9 +313,9 @@ torus, plane, capsule, icosahedron, octahedron, tetrahedron, box")
   (ui-element model-label panel
     (position 10 170 0)
     (size 300 60)
-    (text "3D MODELS SECTION (Placeholders)
-Model loading coming soon!
-GLB, OBJ, PLY, STL formats planned")
+    (text "3D MODELS SECTION
+✓ STL and OBJ loading implemented!
+Loading teapot.obj and component.stl")
     (color 0.8 1.0 0.8 0.8))
     
   (ui-element behavior-label panel

@@ -308,9 +308,10 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
         _ => anyhow::bail!("object name must be symbol"),
     };
     
+    // mesh_type can be either a primitive name (cube, sphere) or a model path
     let mesh_type = match &parts[1] {
-        Expr::Sym(s) => s.clone(),
-        _ => anyhow::bail!("mesh type must be symbol"),
+        Expr::Sym(s) => s.clone(), // Both primitives and paths are symbols in our parser
+        _ => anyhow::bail!("mesh type must be symbol (primitive name or model path)"),
     };
     
     let mut transform = TransformDef {

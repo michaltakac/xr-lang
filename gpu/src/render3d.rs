@@ -390,7 +390,34 @@ impl Renderer3D {
                     // Generate proper mesh for each primitive type
                     Mesh::from_primitive(device, primitive)
                 }
-                _ => Mesh::cube(device), // Fallback for models and procedural
+                crate::entity::MeshSource::Model(model_source) => {
+                    // Load model from file
+                    match crate::model_loader::load_model(model_source) {
+                        Ok(mesh_data) => {
+                            // Convert mesh_gen vertices to Vertex3D
+                            let vertices: Vec<Vertex3D> = mesh_data.vertices.iter().map(|v| {
+                                Vertex3D::new(v.position, v.normal, v.tex_coords)
+                            }).collect();
+                            
+                            // Convert u32 indices to u16 (with bounds checking)
+                            let indices: Vec<u16> = mesh_data.indices.iter().map(|&i| {
+                                if i > u16::MAX as u32 {
+                                    log::warn!("Index {} exceeds u16 max, clamping", i);
+                                    u16::MAX
+                                } else {
+                                    i as u16
+                                }
+                            }).collect();
+                            
+                            Mesh::new(device, vertices, indices)
+                        }
+                        Err(e) => {
+                            log::error!("Failed to load model: {}", e);
+                            Mesh::cube(device) // Fallback to cube on error
+                        }
+                    }
+                }
+                _ => Mesh::cube(device), // Fallback for procedural
             };
             
             mesh.transform.position = entity.transform.position;
