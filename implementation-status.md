@@ -12,8 +12,17 @@
 - **Meta directive parsing**: Added support for parsing preservation metadata
 - **Object IDs**: Objects can have unique identifiers for state tracking
 - **Property-specific preservation**: Can specify which properties to preserve
+- **Arithmetic operator parsing**: Fixed '+' and '-' symbols being incorrectly parsed as numbers
+- **Multiple statement handling**: Parser now automatically wraps multiple statements in behavior functions with `begin` blocks
 
-### 3. Testing Framework Foundation
+### 3. Hot-Swapping & Behavior System
+- **Generic property system**: Behaviors can now set any property (rotation.x, rotation.y, position.z, etc.)
+- **Dynamic property updates**: All behavior-set properties are captured and applied to entities
+- **Multi-axis rotation support**: Entities can rotate around X, Y, or Z axes independently
+- **Improved hot-swapping**: State changes in behaviors are properly detected and applied at runtime
+- **State preservation during hot-swap**: Runtime values (like accumulated time) are preserved when behaviors are reloaded
+
+### 4. Testing Framework Foundation
 - **Test AST**: Complete AST for test definitions including:
   - Basic tests with setup/actions/assertions
   - Recording-based tests
