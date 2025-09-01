@@ -4,13 +4,13 @@
 ;; Try modifying different parts of this file and watch the console output
 ;; to see what gets recompiled vs what gets incrementally updated
 
-(behavior spin
+(defbehavior spin
   (state (speed 1.0))
   (update (dt)
     (let ((angle (* speed dt)))
       (gpu.entity.rotate-y angle))))
 
-(behavior pulse
+(defbehavior pulse
   (state (time 0.0) (scale 1.0))
   (update (dt)
     (let ((new-time (+ time dt)))
@@ -18,7 +18,7 @@
       (set! scale (+ 1.0 (* 0.3 (sin (* new-time 2.0)))))
       (gpu.entity.scale scale scale scale))))
 
-(behavior color-cycle
+(defbehavior color-cycle
   (state (time 0.0))
   (update (dt)
     (let ((new-time (+ time dt)))

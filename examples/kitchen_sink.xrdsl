@@ -7,7 +7,7 @@
 ; ============================================
 
 (defbehavior spin
-  (state (speed 2.0))
+  (state (speed 1.0))
   (update (dt)
     (set! rotation.y (+ rotation.y (* speed dt)))))
 

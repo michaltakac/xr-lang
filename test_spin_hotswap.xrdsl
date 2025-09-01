@@ -1,0 +1,43 @@
+; Simple test for behavior hot-swapping
+; 
+; INSTRUCTIONS TO TEST:
+; 1. Run: cargo run -p desktop -- test_spin_hotswap.xrdsl
+; 2. Watch the red cube spinning
+; 3. Try these changes while the app is running:
+;    - Change speed from 2.0 to 10.0
+;    - Change rotation.y to rotation.x (spins on different axis)
+;    - Change rotation.y to rotation.z
+; 4. Save the file - changes should apply immediately!
+
+(defbehavior spin
+  (state (speed 2.0))  ; <- Try changing this to 10.0
+  (update (dt)
+    ; Currently rotates around Y axis
+    ; Try changing rotation.y to rotation.x or rotation.z
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d test-scene
+  (camera
+    (position 0 5 10)
+    (target 0 0 0)
+    (fov 45))
+    
+  (object spinning-cube cube
+    (position 0 0 0)
+    (scale 2 2 2)
+    (color 1.0 0.2 0.2)
+    (behavior spin))
+    
+  ; Add more cubes to see all update at once
+  (object cube2 cube
+    (position -4 0 0)
+    (scale 1.5 1.5 1.5)
+    (color 0.2 1.0 0.2)
+    (behavior spin))
+    
+  (object cube3 cube
+    (position 4 0 0)
+    (scale 1.5 1.5 1.5)
+    (color 0.2 0.2 1.0)
+    (behavior spin))
+)
