@@ -642,32 +642,70 @@ impl Renderer3D {
                     let object_id = &entity.id;
                     
                     // Run the behavior through the interpreter
-                    if let Ok(update) = self.behavior_system.update_behavior(object_id, behavior_name, dt) {
-                        // Apply rotation delta if behavior computed one
-                        if let Some(rotation_delta) = update.rotation_delta {
-                            let rotation = Quat::from_axis_angle(Vec3::Y, rotation_delta);
-                            mesh.transform.rotation = rotation * mesh.transform.rotation;
+                    match self.behavior_system.update_behavior(object_id, behavior_name, dt) {
+                        Ok(update) => {
+                        // Apply generic property updates
+                        let mut rotation_x = None;
+                        let mut rotation_y = None;
+                        let mut rotation_z = None;
+                        let mut position_x = None;
+                        let mut position_y = None;
+                        let mut position_z = None;
+                        let mut scale_x = None;
+                        let mut scale_y = None;
+                        let mut scale_z = None;
+                        
+                        // Extract all properties
+                        for (key, value) in &update.properties {
+                            if let vm::Value::F32(v) = value {
+                                match key.as_str() {
+                                    "rotation.x" => rotation_x = Some(*v),
+                                    "rotation.y" => rotation_y = Some(*v),
+                                    "rotation.z" => rotation_z = Some(*v),
+                                    "position.x" => position_x = Some(*v),
+                                    "position.y" => position_y = Some(*v),
+                                    "position.z" => position_z = Some(*v),
+                                    "scale.x" => scale_x = Some(*v),
+                                    "scale.y" => scale_y = Some(*v),
+                                    "scale.z" => scale_z = Some(*v),
+                                    _ => {}
+                                }
+                            }
                         }
                         
-                        // Apply absolute rotation if set
-                        if let Some(rotation) = update.rotation {
-                            mesh.transform.rotation = Quat::from_axis_angle(Vec3::Y, rotation);
+                        // Apply rotations (convert Euler angles to quaternion)
+                        if rotation_x.is_some() || rotation_y.is_some() || rotation_z.is_some() {
+                            let rx = rotation_x.unwrap_or(0.0);  // pitch (rotation around X)
+                            let ry = rotation_y.unwrap_or(0.0);  // yaw (rotation around Y)
+                            let rz = rotation_z.unwrap_or(0.0);  // roll (rotation around Z)
+                            mesh.transform.rotation = Quat::from_euler(rx, ry, rz);
                         }
                         
-                        // Apply position updates if any
-                        if let Some((x, y, z)) = update.position {
-                            mesh.transform.position = Vec3::new(x, y, z);
+                        // Apply position if any component changed
+                        if position_x.is_some() || position_y.is_some() || position_z.is_some() {
+                            mesh.transform.position = Vec3::new(
+                                position_x.unwrap_or(mesh.transform.position.x),
+                                position_y.unwrap_or(mesh.transform.position.y),
+                                position_z.unwrap_or(mesh.transform.position.z),
+                            );
                         }
                         
-                        // Apply scale updates if any
-                        if let Some((x, y, z)) = update.scale {
-                            mesh.transform.scale = Vec3::new(x, y, z);
+                        // Apply scale if any component changed
+                        if scale_x.is_some() || scale_y.is_some() || scale_z.is_some() {
+                            mesh.transform.scale = Vec3::new(
+                                scale_x.unwrap_or(mesh.transform.scale.x),
+                                scale_y.unwrap_or(mesh.transform.scale.y),
+                                scale_z.unwrap_or(mesh.transform.scale.z),
+                            );
                         }
-                    } else {
-                        // Fallback to simple rotation if behavior fails
-                        let rotation_speed = 1.0 * dt;
-                        let rotation_delta = Quat::from_axis_angle(Vec3::Y, rotation_speed);
-                        mesh.transform.rotation = rotation_delta * mesh.transform.rotation;
+                        }
+                        Err(e) => {
+                            println!("      ERROR: Behavior update failed for '{}': {}", behavior_name, e);
+                            // Fallback to simple rotation if behavior fails
+                            let rotation_speed = 1.0 * dt;
+                            let rotation_delta = Quat::from_axis_angle(Vec3::Y, rotation_speed);
+                            mesh.transform.rotation = rotation_delta * mesh.transform.rotation;
+                        }
                     }
                 } else {
                     // No behavior - no rotation

@@ -151,6 +151,16 @@ impl Interpreter {
             // Start with the behavior's persistent environment
             let mut env = behavior.env.clone();
             
+            // Debug: Check if speed is in environment
+            if let Some(Value::F32(speed)) = env.get("speed") {
+                println!("      DEBUG: Using speed = {} for behavior '{}'", speed, name);
+            }
+            
+            // Debug: Check if rotation.y is already in persistent env
+            if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
+                println!("      DEBUG: rotation.y from persistent env = {}", rot_y);
+            }
+            
             // Bind parameters (typically just 'dt')
             if !update_fn.params.is_empty() && update_fn.params[0] == "dt" {
                 env.set("dt".to_string(), Value::F32(dt));
@@ -167,17 +177,42 @@ impl Interpreter {
                 }
             }
             
-            // Debug: Check what rotation.y value we have before execution
+            // Debug: Check rotation.y before execution
             if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
-                println!("    DEBUG: rotation.y before = {}", rot_y);
+                println!("      DEBUG: rotation.y before = {}", rot_y);
             }
             
+            // Debug: Print the body structure
+            println!("      DEBUG: Behavior body structure: {:?}", update_fn.body);
+            
             // Execute update function with the NEW body (from hot-swap)
-            let _result = self.eval(&update_fn.body, &mut env)?;
+            // Handle body that might be a sequence of statements
+            let _result = match &update_fn.body {
+                dsl::ast::Expr::List(exprs) if !exprs.is_empty() => {
+                    // Check if this is a function call or a sequence of statements
+                    if let dsl::ast::Expr::Sym(s) = &exprs[0] {
+                        // It's a function call
+                        self.eval(&update_fn.body, &mut env)?
+                    } else {
+                        // It's a sequence of statements - evaluate each one
+                        let mut last_result = Value::Nil;
+                        for expr in exprs {
+                            last_result = self.eval(expr, &mut env)?;
+                        }
+                        last_result
+                    }
+                }
+                _ => self.eval(&update_fn.body, &mut env)?
+            };
             
             // Debug: Check what rotation.y value we have after execution
             if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
-                println!("    DEBUG: rotation.y after = {}", rot_y);
+                println!("      DEBUG: rotation.y after = {}", rot_y);
+            }
+            
+            // Debug: Check speed value in env after execution
+            if let Some(Value::F32(speed)) = env.get("speed") {
+                println!("      DEBUG: speed in env after execution = {}", speed);
             }
             
             // Update behavior's persistent environment and state with changes
@@ -190,6 +225,9 @@ impl Interpreter {
                     // Also preserve runtime values (like rotation.y) in the behavior's env
                     if key.contains('.') || !behavior_mut.state.contains_key(key) {
                         behavior_mut.env.set(key.clone(), value.clone());
+                        if key == "rotation.y" {
+                            println!("        DEBUG: Stored rotation.y = {:?} in persistent env", value);
+                        }
                     }
                 }
             }
@@ -220,7 +258,10 @@ impl Interpreter {
                             "rotation" => {
                                 // Default rotation values
                                 match field {
-                                    "x" | "y" | "z" => Ok(Value::F32(0.0)),
+                                    "x" | "y" | "z" => {
+                                        println!("        DEBUG: rotation.{} not found, returning default 0.0", field);
+                                        Ok(Value::F32(0.0))
+                                    },
                                     _ => Err(anyhow!("Unknown rotation field: {}", field)),
                                 }
                             }
@@ -263,6 +304,15 @@ impl Interpreter {
                 match head {
                     dsl::ast::Expr::Sym(op) => {
                         self.eval_operation(op, &list[1..], env)
+                    }
+                    dsl::ast::Expr::List(_) => {
+                        // If the first element is a list, this is a sequence of statements
+                        // Evaluate each statement in order
+                        let mut last_result = Value::Nil;
+                        for expr in list {
+                            last_result = self.eval(expr, env)?;
+                        }
+                        Ok(last_result)
                     }
                     _ => {
                         // Try to evaluate as function call
@@ -313,12 +363,23 @@ impl Interpreter {
             }
             "*" | "mul" => {
                 let mut product = 1.0;
+                let mut debug_values = Vec::new();
                 for arg in args {
                     match self.eval(arg, env)? {
-                        Value::F32(n) => product *= n,
-                        Value::I32(n) => product *= n as f32,
+                        Value::F32(n) => {
+                            debug_values.push(n);
+                            product *= n;
+                        },
+                        Value::I32(n) => {
+                            debug_values.push(n as f32);
+                            product *= n as f32;
+                        },
                         _ => return Err(anyhow!("* expects numbers")),
                     }
+                }
+                // Debug multiplication for rotation calculations
+                if debug_values.len() == 2 && (debug_values[0] > 0.5 || debug_values[1] > 0.5) {
+                    println!("        DEBUG: * {} × {} = {}", debug_values[0], debug_values[1], product);
                 }
                 Ok(Value::F32(product))
             }
@@ -394,6 +455,15 @@ impl Interpreter {
             }
             
             // Let binding
+            "begin" | "do" | "progn" => {
+                // Execute each expression in sequence, returning the last result
+                let mut result = Value::Nil;
+                for arg in args {
+                    result = self.eval(arg, env)?;
+                }
+                Ok(result)
+            }
+            
             "let" => {
                 if args.len() != 2 {
                     return Err(anyhow!("let needs bindings and body"));

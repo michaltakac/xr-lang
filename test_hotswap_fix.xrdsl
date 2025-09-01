@@ -1,0 +1,40 @@
+; Test hot-swapping with different speed values
+
+(defbehavior somespin
+  (state 
+    (speed 10.0)  ; Changed to 10.0 - should spin faster!
+    (time 0.0)
+    (bounce-height 4.0))  ; Also changed bounce height!
+  (update (dt)
+    ; Accumulate time for wave motion
+    (set! time (+ time dt))
+    ; Rotate around Y axis  
+    (set! rotation.y (+ rotation.y (* speed dt)))
+    ; Add bouncing motion on Y axis
+    (set! position.y (+ 1.0 (* bounce-height (sin (* time 3.0)))))
+    ; Pulse the scale
+    (let ((pulse (+ 1.0 (* 0.3 (cos (* time 5.0))))))
+      (set! scale.x pulse)
+      (set! scale.y pulse) 
+      (set! scale.z pulse))))
+
+(defscene3d demo-scene
+  (camera
+    (position 0 8 15)
+    (target 0 0 0)
+    (fov 40))
+    
+  (object cube1 cube
+    (position -3 1 0)
+    (scale 1.0 1.0 1.0)
+    (behavior somespin))
+    
+  (object cube2 cube
+    (position 0 3 0)
+    (scale 1.0 1.0 1.0)
+    (behavior somespin))
+    
+  (object cube3 cube
+    (position 3 1 0)
+    (scale 1.0 1.0 1.0)
+    (behavior somespin)))

@@ -73,13 +73,9 @@ impl<'a> Iterator for Lexer<'a> {
                     self.i += 1;
                     Tok::RPar
                 }
-                b'0'..=b'9' | b'-' | b'+' => {
+                b'0'..=b'9' => {
                     let start = self.i;
                     let mut has_dot = false;
-                    
-                    if self.s[self.i] == b'-' || self.s[self.i] == b'+' {
-                        self.i += 1;
-                    }
                     
                     while self.i < self.s.len() && (self.s[self.i].is_ascii_digit() || self.s[self.i] == b'.') {
                         if self.s[self.i] == b'.' {
@@ -94,6 +90,34 @@ impl<'a> Iterator for Lexer<'a> {
                         Tok::Num(s.parse::<f32>().unwrap_or(0.0))
                     } else {
                         Tok::Int(s.parse::<i32>().unwrap_or(0))
+                    }
+                }
+                b'-' | b'+' => {
+                    let start = self.i;
+                    let sign_char = self.s[self.i];
+                    self.i += 1;
+                    
+                    // Check if this is a number (sign followed by digit)
+                    if self.i < self.s.len() && self.s[self.i].is_ascii_digit() {
+                        let mut has_dot = false;
+                        
+                        while self.i < self.s.len() && (self.s[self.i].is_ascii_digit() || self.s[self.i] == b'.') {
+                            if self.s[self.i] == b'.' {
+                                if has_dot { break; }
+                                has_dot = true;
+                            }
+                            self.i += 1;
+                        }
+                        
+                        let s = std::str::from_utf8(&self.s[start..self.i]).unwrap();
+                        if has_dot {
+                            Tok::Num(s.parse::<f32>().unwrap_or(0.0))
+                        } else {
+                            Tok::Int(s.parse::<i32>().unwrap_or(0))
+                        }
+                    } else {
+                        // It's just a symbol (operator)
+                        Tok::Sym(if sign_char == b'+' { "+".to_string() } else { "-".to_string() })
                     }
                 }
                 _ => {
@@ -216,9 +240,23 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
                                 params.push(s.clone());
                             }
                         }
+                        
+                        // If there are multiple statements, wrap them in a begin block
+                        let body = if parts.len() > 3 {
+                            // Multiple statements - wrap in begin
+                            let mut statements = vec![Expr::Sym("begin".to_string())];
+                            for stmt in &parts[2..] {
+                                statements.push(stmt.clone());
+                            }
+                            Expr::List(statements)
+                        } else {
+                            // Single statement
+                            parts[2].clone()
+                        };
+                        
                         update = Some(FnDef {
                             params,
-                            body: parts[2].clone(),
+                            body,
                         });
                     }
                     "on_select" => {
@@ -231,9 +269,23 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
                                 params.push(s.clone());
                             }
                         }
+                        
+                        // If there are multiple statements, wrap them in a begin block
+                        let body = if parts.len() > 3 {
+                            // Multiple statements - wrap in begin
+                            let mut statements = vec![Expr::Sym("begin".to_string())];
+                            for stmt in &parts[2..] {
+                                statements.push(stmt.clone());
+                            }
+                            Expr::List(statements)
+                        } else {
+                            // Single statement
+                            parts[2].clone()
+                        };
+                        
                         on_select = Some(FnDef {
                             params,
-                            body: parts[2].clone(),
+                            body,
                         });
                     }
                     _ => anyhow::bail!("unknown behavior form: {}", tag),
