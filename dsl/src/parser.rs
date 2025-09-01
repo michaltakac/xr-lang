@@ -171,7 +171,7 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
     };
     
     match head.as_str() {
-        "defbehavior" => {
+        "defbehavior" | "behavior" => {
             let name = match &list[1] {
                 Expr::Sym(s) => s.clone(),
                 _ => anyhow::bail!("behavior name must be symbol"),

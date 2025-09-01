@@ -319,7 +319,7 @@ impl SceneReconciler {
                 
                 cam_a.position == cam_b.position &&
                 cam_a.target == cam_b.target &&
-                (cam_a.fov - cam_b.fov).abs() < 0.001
+                (cam_a.fov - cam_b.fov).abs() < 0.1
             }
             _ => false
         }
@@ -332,7 +332,7 @@ impl SceneReconciler {
                 light_a.ambient == light_b.ambient &&
                 light_a.directional_direction == light_b.directional_direction &&
                 light_a.directional_color == light_b.directional_color &&
-                (light_a.directional_intensity - light_b.directional_intensity).abs() < 0.001
+                (light_a.directional_intensity - light_b.directional_intensity).abs() < 0.01
             }
             _ => false
         }

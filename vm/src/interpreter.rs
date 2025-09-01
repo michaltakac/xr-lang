@@ -106,6 +106,7 @@ impl Interpreter {
         let mut state = HashMap::new();
         for (key, value) in &behavior.state {
             state.insert(key.clone(), Value::F32(*value));
+            println!("      DEBUG: Loading state {} = {} for behavior '{}'", key, value, behavior.name);
         }
         
         let mut env = Environment::with_parent(self.global_env.clone());
@@ -147,7 +148,8 @@ impl Interpreter {
             .clone();
         
         if let Some(update_fn) = behavior.update_fn {
-            let mut env = update_fn.env.clone();
+            // Start with the behavior's persistent environment
+            let mut env = behavior.env.clone();
             
             // Bind parameters (typically just 'dt')
             if !update_fn.params.is_empty() && update_fn.params[0] == "dt" {
@@ -157,16 +159,37 @@ impl Interpreter {
             // Add behavior state to environment
             for (key, value) in &behavior.state {
                 env.set(key.clone(), value.clone());
+                // Debug: Log state values being used
+                if key == "speed" {
+                    if let Value::F32(speed) = value {
+                        println!("    DEBUG: Using speed = {} for behavior '{}'", speed, name);
+                    }
+                }
             }
             
-            // Execute update function
+            // Debug: Check what rotation.y value we have before execution
+            if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
+                println!("    DEBUG: rotation.y before = {}", rot_y);
+            }
+            
+            // Execute update function with the NEW body (from hot-swap)
             let _result = self.eval(&update_fn.body, &mut env)?;
             
-            // Update behavior state with any changes
+            // Debug: Check what rotation.y value we have after execution
+            if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
+                println!("    DEBUG: rotation.y after = {}", rot_y);
+            }
+            
+            // Update behavior's persistent environment and state with changes
             if let Some(behavior_mut) = self.behaviors.get_mut(name) {
-                for (key, value) in env.vars {
-                    if behavior_mut.state.contains_key(&key) {
-                        behavior_mut.state.insert(key, value);
+                // Update state values
+                for (key, value) in &env.vars {
+                    if behavior_mut.state.contains_key(key) {
+                        behavior_mut.state.insert(key.clone(), value.clone());
+                    }
+                    // Also preserve runtime values (like rotation.y) in the behavior's env
+                    if key.contains('.') || !behavior_mut.state.contains_key(key) {
+                        behavior_mut.env.set(key.clone(), value.clone());
                     }
                 }
             }
@@ -181,8 +204,53 @@ impl Interpreter {
             dsl::ast::Expr::I32(n) => Ok(Value::I32(*n)),
             dsl::ast::Expr::Bool(b) => Ok(Value::Bool(*b)),
             dsl::ast::Expr::Sym(s) => {
-                // Look up variable
-                env.get(s).ok_or_else(|| anyhow!("Undefined variable: {}", s))
+                // Handle dotted notation for reading (e.g., rotation.y)
+                if s.contains('.') {
+                    let parts: Vec<&str> = s.split('.').collect();
+                    if parts.len() == 2 {
+                        // Try to get the dotted value directly first
+                        if let Some(val) = env.get(s) {
+                            return Ok(val);
+                        }
+                        
+                        // Otherwise, return a default value for known fields
+                        let base = parts[0];
+                        let field = parts[1];
+                        match base {
+                            "rotation" => {
+                                // Default rotation values
+                                match field {
+                                    "x" | "y" | "z" => Ok(Value::F32(0.0)),
+                                    _ => Err(anyhow!("Unknown rotation field: {}", field)),
+                                }
+                            }
+                            "position" => {
+                                match field {
+                                    "x" | "y" | "z" => Ok(Value::F32(0.0)),
+                                    _ => Err(anyhow!("Unknown position field: {}", field)),
+                                }
+                            }
+                            "scale" => {
+                                match field {
+                                    "x" | "y" | "z" => Ok(Value::F32(1.0)),
+                                    _ => Err(anyhow!("Unknown scale field: {}", field)),
+                                }
+                            }
+                            "color" => {
+                                match field {
+                                    "r" | "g" | "b" | "a" => Ok(Value::F32(1.0)),
+                                    _ => Err(anyhow!("Unknown color field: {}", field)),
+                                }
+                            }
+                            _ => env.get(s).ok_or_else(|| anyhow!("Undefined variable: {}", s))
+                        }
+                    } else {
+                        env.get(s).ok_or_else(|| anyhow!("Undefined variable: {}", s))
+                    }
+                } else {
+                    // Look up variable normally
+                    env.get(s).ok_or_else(|| anyhow!("Undefined variable: {}", s))
+                }
             }
             dsl::ast::Expr::List(list) => {
                 if list.is_empty() {
@@ -362,7 +430,63 @@ impl Interpreter {
                     return Err(anyhow!("set! first argument must be a symbol"));
                 };
                 let value = self.eval(&args[1], env)?;
-                env.set(name.clone(), value.clone());
+                
+                // Handle dotted notation (e.g., rotation.y, position.x)
+                if name.contains('.') {
+                    let parts: Vec<&str> = name.split('.').collect();
+                    if parts.len() == 2 {
+                        let base = parts[0];
+                        let field = parts[1];
+                        
+                        match base {
+                            "rotation" => {
+                                // Store rotation components
+                                match field {
+                                    "x" => env.set("rotation.x".to_string(), value.clone()),
+                                    "y" => env.set("rotation.y".to_string(), value.clone()),
+                                    "z" => env.set("rotation.z".to_string(), value.clone()),
+                                    _ => return Err(anyhow!("Unknown rotation field: {}", field)),
+                                }
+                            }
+                            "position" => {
+                                // Store position components
+                                match field {
+                                    "x" => env.set("position.x".to_string(), value.clone()),
+                                    "y" => env.set("position.y".to_string(), value.clone()),
+                                    "z" => env.set("position.z".to_string(), value.clone()),
+                                    _ => return Err(anyhow!("Unknown position field: {}", field)),
+                                }
+                            }
+                            "scale" => {
+                                // Store scale components
+                                match field {
+                                    "x" => env.set("scale.x".to_string(), value.clone()),
+                                    "y" => env.set("scale.y".to_string(), value.clone()),
+                                    "z" => env.set("scale.z".to_string(), value.clone()),
+                                    _ => return Err(anyhow!("Unknown scale field: {}", field)),
+                                }
+                            }
+                            "color" => {
+                                // Store color components
+                                match field {
+                                    "r" => env.set("color.r".to_string(), value.clone()),
+                                    "g" => env.set("color.g".to_string(), value.clone()),
+                                    "b" => env.set("color.b".to_string(), value.clone()),
+                                    "a" => env.set("color.a".to_string(), value.clone()),
+                                    _ => return Err(anyhow!("Unknown color field: {}", field)),
+                                }
+                            }
+                            _ => {
+                                // Store as-is for unknown base names
+                                env.set(name.clone(), value.clone());
+                            }
+                        }
+                    } else {
+                        env.set(name.clone(), value.clone());
+                    }
+                } else {
+                    env.set(name.clone(), value.clone());
+                }
                 Ok(value)
             }
             

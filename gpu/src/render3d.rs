@@ -382,7 +382,6 @@ impl Renderer3D {
         println!("⚡ Applying {} incremental changes", changes.len());
         
         let mut needs_full_rebuild = false;
-        let mut behavior_changes = false;
         let mut model_reloads = Vec::new();
         
         // Process changes to determine what needs updating
@@ -433,7 +432,7 @@ impl Renderer3D {
                 crate::reconciliation::SceneChange::BehaviorAdded { .. } |
                 crate::reconciliation::SceneChange::BehaviorModified { .. } |
                 crate::reconciliation::SceneChange::BehaviorRemoved { .. } => {
-                    behavior_changes = true;
+                    // These are handled by the hot-swap below
                 }
                 crate::reconciliation::SceneChange::CameraChanged { .. } => {
                     // Camera changes can be applied directly
@@ -461,14 +460,15 @@ impl Renderer3D {
             }
         }
         
-        // Hot-swap behaviors if changed
-        if behavior_changes && !scene_data.ast.is_empty() {
+        // Hot-swap behaviors if we have AST (always hot-swap for incremental updates)
+        // This ensures behavior changes are always applied, even for state-only changes
+        if !scene_data.ast.is_empty() {
             if let Err(e) = self.behavior_system.hot_swap_behaviors(&scene_data.ast) {
                 println!("⚠️ Failed to hot-swap behaviors: {}", e);
                 self.ui_system.add_log_entry(&format!("⚠️ Behavior hot-swap failed: {}", e));
             } else {
                 self.ui_system.add_log_entry("✨ Behaviors hot-swapped!");
-                println!("  ✨ Behaviors hot-swapped");
+                println!("  ✨ Behaviors hot-swapped (incremental)");
             }
         }
         

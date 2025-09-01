@@ -34,27 +34,36 @@ async fn main() -> Result<()> {
     let mut renderer_3d = gpu::Renderer3D::new(&gpu_ctx.device, &gpu_ctx.queue, &gpu_ctx.config);
     println!("✅ 3D renderer created!");
     
-    // Set up hot-reload system
-    let examples_path = if std::path::Path::new("examples").exists() {
-        std::path::Path::new("examples")
-    } else if std::path::Path::new("../../examples").exists() {
-        std::path::Path::new("../../examples")
-    } else {
-        println!("⚠️ Examples directory not found, hot-reload disabled");
-        std::path::Path::new(".")
-    };
-    let mut hot_reloader = HotReloader::new(&examples_path)?;
-    let mut scene_loader = SceneLoader::new();
-    
     // Load scene from command-line argument or default to spinning_cubes.xrdsl
     let args: Vec<String> = std::env::args().collect();
     let initial_scene = if args.len() > 1 {
-        // Use provided scene file
-        std::path::PathBuf::from(&args[1])
+        // Use provided scene file - convert to absolute path if relative
+        let path = std::path::PathBuf::from(&args[1]);
+        if path.is_absolute() {
+            path
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")).join(path)
+        }
     } else {
-        // Default to spinning_cubes.xrdsl
+        // Default to examples directory
+        let examples_path = if std::path::Path::new("examples").exists() {
+            std::path::Path::new("examples")
+        } else if std::path::Path::new("../../examples").exists() {
+            std::path::Path::new("../../examples")
+        } else {
+            std::path::Path::new(".")
+        };
         examples_path.join("spinning_cubes.xrdsl")
     };
+    
+    // Set up hot-reload system to watch the directory containing the target file
+    let watch_path = if let Some(parent) = initial_scene.parent() {
+        parent
+    } else {
+        std::path::Path::new(".")
+    };
+    let mut hot_reloader = HotReloader::new(&watch_path)?;
+    let mut scene_loader = SceneLoader::new();
     
     if initial_scene.exists() {
         if let Ok(Some(update)) = scene_loader.load_scene_from_file(initial_scene.to_str().unwrap()) {

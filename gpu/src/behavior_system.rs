@@ -22,24 +22,47 @@ impl BehaviorSystem {
     pub fn hot_swap_behaviors(&mut self, ast: &[dsl::ast::Top]) -> Result<()> {
         println!("🔥 Hot-swapping behaviors...");
         
-        // Clear old behaviors but preserve state where possible
-        let old_states = self.preserve_behavior_states();
+        // Collect runtime states to preserve (only dotted notation values like rotation.y)
+        let mut runtime_states_to_preserve = HashMap::new();
         
-        // Load new behaviors
+        for item in ast {
+            if let dsl::ast::Top::Behavior(new_behavior) = item {
+                if let Some(current_behavior) = self.interpreter.behaviors.get(&new_behavior.name) {
+                    let mut runtime_state = HashMap::new();
+                    
+                    // Only preserve dotted notation values (these are runtime-computed values)
+                    for (key, value) in &current_behavior.env.vars {
+                        if key.contains('.') {
+                            runtime_state.insert(key.clone(), value.clone());
+                        }
+                    }
+                    
+                    if !runtime_state.is_empty() {
+                        runtime_states_to_preserve.insert(new_behavior.name.clone(), runtime_state);
+                    }
+                }
+            }
+        }
+        
+        // Load new behaviors with updated AST
         for item in ast {
             if let dsl::ast::Top::Behavior(behavior) = item {
                 println!("  📦 Loading behavior: {}", behavior.name);
                 
-                // Store the AST for the behavior
+                // Update the AST
                 self.behavior_ast.insert(behavior.name.clone(), behavior.clone());
                 
-                // Load into interpreter
+                // Load into interpreter (this uses the new initial values from AST)
                 self.interpreter.load_behavior(behavior)?;
                 
-                // Restore state if this behavior existed before
-                if let Some(old_state) = old_states.get(&behavior.name) {
-                    self.restore_behavior_state(&behavior.name, old_state)?;
-                    println!("    ✅ Preserved state for '{}'", behavior.name);
+                // Restore only runtime computed values (dotted notation)
+                if let Some(runtime_state) = runtime_states_to_preserve.get(&behavior.name) {
+                    if let Some(behavior_mut) = self.interpreter.behaviors.get_mut(&behavior.name) {
+                        for (key, value) in runtime_state {
+                            behavior_mut.env.set(key.clone(), value.clone());
+                        }
+                        println!("    ✅ Preserved runtime values for '{}'", behavior.name);
+                    }
                 }
             }
         }
@@ -48,33 +71,6 @@ impl BehaviorSystem {
         Ok(())
     }
     
-    /// Preserve current behavior states before hot-swap
-    fn preserve_behavior_states(&self) -> HashMap<String, HashMap<String, vm::Value>> {
-        let mut states = HashMap::new();
-        
-        for (name, behavior) in &self.interpreter.behaviors {
-            let mut state = HashMap::new();
-            for (key, value) in &behavior.state {
-                state.insert(key.clone(), value.clone());
-            }
-            states.insert(name.clone(), state);
-        }
-        
-        states
-    }
-    
-    /// Restore behavior state after hot-swap
-    fn restore_behavior_state(&mut self, name: &str, state: &HashMap<String, vm::Value>) -> Result<()> {
-        if let Some(behavior) = self.interpreter.behaviors.get_mut(name) {
-            for (key, value) in state {
-                // Only restore if the key still exists in the new behavior
-                if behavior.state.contains_key(key) {
-                    behavior.state.insert(key.clone(), value.clone());
-                }
-            }
-        }
-        Ok(())
-    }
     
     /// Update a behavior for a specific object
     pub fn update_behavior(&mut self, object_id: &str, behavior_name: &str, dt: f32) -> Result<BehaviorUpdate> {
@@ -86,18 +82,60 @@ impl BehaviorSystem {
         
         // Check for rotation updates
         if let Some(behavior) = self.interpreter.behaviors.get(behavior_name) {
-            // Check for rotation in state
-            if let Some(vm::Value::F32(rotation)) = behavior.state.get("rotation") {
+            // Check for rotation.y in the environment (this is what kitchen_sink uses)
+            if let Some(vm::Value::F32(rotation_y)) = behavior.env.get("rotation.y") {
+                update.rotation = Some(rotation_y);
+            } else if let Some(vm::Value::F32(rotation)) = behavior.state.get("rotation") {
                 update.rotation = Some(*rotation);
             }
             
-            // Check for position updates
-            if let Some(vm::Value::Vec3(x, y, z)) = behavior.state.get("position") {
+            // Check for position components
+            let mut pos_changed = false;
+            let mut pos_x = 0.0;
+            let mut pos_y = 0.0; 
+            let mut pos_z = 0.0;
+            
+            if let Some(vm::Value::F32(x)) = behavior.env.get("position.x") {
+                pos_x = x;
+                pos_changed = true;
+            }
+            if let Some(vm::Value::F32(y)) = behavior.env.get("position.y") {
+                pos_y = y;
+                pos_changed = true;
+            }
+            if let Some(vm::Value::F32(z)) = behavior.env.get("position.z") {
+                pos_z = z;
+                pos_changed = true;
+            }
+            
+            if pos_changed {
+                update.position = Some((pos_x, pos_y, pos_z));
+            } else if let Some(vm::Value::Vec3(x, y, z)) = behavior.state.get("position") {
                 update.position = Some((*x, *y, *z));
             }
             
-            // Check for scale updates
-            if let Some(vm::Value::Vec3(x, y, z)) = behavior.state.get("scale") {
+            // Check for scale components
+            let mut scale_changed = false;
+            let mut scale_x = 1.0;
+            let mut scale_y = 1.0;
+            let mut scale_z = 1.0;
+            
+            if let Some(vm::Value::F32(x)) = behavior.env.get("scale.x") {
+                scale_x = x;
+                scale_changed = true;
+            }
+            if let Some(vm::Value::F32(y)) = behavior.env.get("scale.y") {
+                scale_y = y;
+                scale_changed = true;
+            }
+            if let Some(vm::Value::F32(z)) = behavior.env.get("scale.z") {
+                scale_z = z;
+                scale_changed = true;
+            }
+            
+            if scale_changed {
+                update.scale = Some((scale_x, scale_y, scale_z));
+            } else if let Some(vm::Value::Vec3(x, y, z)) = behavior.state.get("scale") {
                 update.scale = Some((*x, *y, *z));
             }
             
