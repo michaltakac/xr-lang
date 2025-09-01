@@ -96,7 +96,7 @@ pub struct RotationKeysData {
 
 impl Default for SceneData {
     fn default() -> Self {
-        use crate::entity::{Entity, PrimitiveType, MeshSource, Transform, Material};
+        use crate::entity::{Entity, PrimitiveType, MeshSource, Transform};
         
         let mut behaviors = HashMap::new();
         let mut spin_state = HashMap::new();
@@ -117,10 +117,7 @@ impl Default for SceneData {
                     rotation: Quat::IDENTITY,
                     scale: Vec3::ONE,
                 },
-                material: Material {
-                    color: [1.0, 0.5, 0.0, 1.0],
-                    ..Material::default()
-                },
+                material: None,
                 behavior: Some("spin".to_string()),
                 children: Vec::new(),
                 parent: None,
@@ -136,10 +133,7 @@ impl Default for SceneData {
                     rotation: Quat::IDENTITY,
                     scale: Vec3::ONE,
                 },
-                material: Material {
-                    color: [0.0, 1.0, 0.5, 1.0],
-                    ..Material::default()
-                },
+                material: None,
                 behavior: Some("spin".to_string()),
                 children: Vec::new(),
                 parent: None,

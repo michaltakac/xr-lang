@@ -16,6 +16,13 @@ pub mod scene;
 pub mod gizmo;
 pub mod runtime_state;
 pub mod behavior_system;
+pub mod code_sync;
+pub mod perf_monitor;
+pub mod perf_monitor_simple;
+pub mod perf_overlay;
+pub mod perf_overlay_live;
+pub mod debug_config;
+pub mod materials;
 
 pub use device::*;
 pub use shader::*;

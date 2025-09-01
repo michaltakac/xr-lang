@@ -7,6 +7,7 @@ enum Tok {
     LPar,
     RPar,
     Sym(String),
+    Str(String),
     Num(f32),
     Int(i32),
     True,
@@ -72,6 +73,23 @@ impl<'a> Iterator for Lexer<'a> {
                 b')' => {
                     self.i += 1;
                     Tok::RPar
+                }
+                b'"' => {
+                    // Parse string literal
+                    self.i += 1; // Skip opening quote
+                    let start = self.i;
+                    while self.i < self.s.len() && self.s[self.i] != b'"' {
+                        if self.s[self.i] == b'\\' && self.i + 1 < self.s.len() {
+                            self.i += 2; // Skip escape sequence
+                        } else {
+                            self.i += 1;
+                        }
+                    }
+                    let s = std::str::from_utf8(&self.s[start..self.i]).unwrap().to_string();
+                    if self.i < self.s.len() {
+                        self.i += 1; // Skip closing quote
+                    }
+                    Tok::Str(s)
                 }
                 b'0'..=b'9' => {
                     let start = self.i;
@@ -180,6 +198,7 @@ fn parse_expr(lexer: &mut Lexer) -> anyhow::Result<Expr> {
         Some(Tok::True) => Ok(Expr::Bool(true)),
         Some(Tok::False) => Ok(Expr::Bool(false)),
         Some(Tok::Sym(s)) => Ok(Expr::Sym(s)),
+        Some(Tok::Str(s)) => Ok(Expr::Str(s)),
         None => anyhow::bail!("unexpected EOF"),
     }
 }
@@ -313,7 +332,11 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
             let mut lighting = None;
             let mut input = None;
             
-            for form in &list[2..] {
+            // First, expand any macros in the scene forms
+            let forms = list[2..].to_vec();
+            let expanded_forms = crate::scene_macros::expand_scene_forms(forms)?;
+            
+            for form in &expanded_forms {
                 let Expr::List(parts) = form else {
                     anyhow::bail!("scene form must be list")
                 };
@@ -357,7 +380,8 @@ fn desugar_top(e: Expr) -> anyhow::Result<Top> {
 fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
     let name = match &parts[0] {
         Expr::Sym(s) => s.clone(),
-        _ => anyhow::bail!("object name must be symbol"),
+        Expr::Str(s) => s.clone(),
+        _ => anyhow::bail!("object name must be symbol or string"),
     };
     
     // mesh_type can be either a primitive name (cube, sphere) or a model path
@@ -371,7 +395,7 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
         rotation: [0.0, 0.0, 0.0],
         scale: [1.0, 1.0, 1.0],
     };
-    let material = None;
+    let mut material = None;
     let mut behavior = None;
     let mut interactive = false;
     let mut meta = None;
@@ -388,6 +412,9 @@ fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
                     }
                     "scale" => {
                         transform.scale = parse_vec3(&prop[1..])?;
+                    }
+                    "material" => {
+                        material = Some(parse_material(&prop[1..])?);
                     }
                     "behavior" => {
                         if let Expr::Sym(b) = &prop[1] {
@@ -550,13 +577,8 @@ fn parse_ui_element(parts: &[Expr]) -> anyhow::Result<UIElement> {
                         }
                     }
                     "color" => {
-                        if list.len() == 5 {
-                            let r = parse_float(&list[1])?;
-                            let g = parse_float(&list[2])?;
-                            let b = parse_float(&list[3])?;
-                            let a = parse_float(&list[4])?;
-                            color = [r, g, b, a];
-                        }
+                        // Use the new color parser that supports multiple formats
+                        color = crate::color::parse_color(&list[1..])?;
                     }
                     "behavior" => {
                         if list.len() == 2 {
@@ -595,9 +617,9 @@ fn parse_lighting(parts: &[Expr]) -> anyhow::Result<LightingDef> {
             if let Some(prop_name) = list[0].as_symbol() {
                 match prop_name {
                     "ambient" => {
-                        if list.len() == 4 {
-                            ambient = parse_vec3(&list[1..])?;
-                        }
+                        // Parse color and take only RGB components for lighting
+                        let rgba = crate::color::parse_color(&list[1..])?;
+                        ambient = [rgba[0], rgba[1], rgba[2]];
                     }
                     "directional" => {
                         // Parse directional light properties
@@ -617,9 +639,9 @@ fn parse_lighting(parts: &[Expr]) -> anyhow::Result<LightingDef> {
                                             }
                                         }
                                         "color" => {
-                                            if dir_list.len() == 4 {
-                                                color = parse_vec3(&dir_list[1..])?;
-                                            }
+                                            // Parse color and take only RGB components for lighting
+                                            let rgba = crate::color::parse_color(&dir_list[1..])?;
+                                            color = [rgba[0], rgba[1], rgba[2]];
                                         }
                                         "intensity" => {
                                             if dir_list.len() == 2 {
@@ -673,6 +695,155 @@ fn parse_vec3(parts: &[Expr]) -> anyhow::Result<[f32; 3]> {
     }
     
     Ok(result)
+}
+
+fn parse_vec4(parts: &[Expr]) -> anyhow::Result<[f32; 4]> {
+    if parts.len() != 4 {
+        anyhow::bail!("vec4 needs exactly 4 components");
+    }
+    
+    let mut result = [0.0; 4];
+    for (i, part) in parts.iter().enumerate() {
+        result[i] = match part {
+            Expr::F32(f) => *f,
+            Expr::I32(i) => *i as f32,
+            _ => anyhow::bail!("vec4 components must be numbers"),
+        };
+    }
+    
+    Ok(result)
+}
+
+fn parse_material(parts: &[Expr]) -> anyhow::Result<MaterialDef> {
+    if parts.is_empty() {
+        anyhow::bail!("material needs at least a type");
+    }
+    
+    // First element should be the material type
+    let material_type = match &parts[0] {
+        Expr::Sym(s) => s.as_str(),
+        _ => anyhow::bail!("material type must be a symbol"),
+    };
+    
+    match material_type {
+        "mesh-basic" => {
+            let mut color = [1.0, 1.0, 1.0, 1.0];
+            let mut opacity = 1.0;
+            let mut transparent = false;
+            let mut side = "front".to_string();
+            let mut wireframe = false;
+            
+            // Parse properties
+            for part in &parts[1..] {
+                if let Expr::List(ref list) = part {
+                    if list.is_empty() { continue; }
+                    
+                    if let Some(prop_name) = list[0].as_symbol() {
+                        match prop_name {
+                            "color" => {
+                                // Use the new color parser that supports multiple formats
+                                color = crate::color::parse_color(&list[1..])?;
+                                // If color has alpha channel less than 1.0, update opacity
+                                if color[3] < 1.0 {
+                                    opacity = color[3];
+                                    transparent = true;
+                                }
+                            }
+                            "opacity" => {
+                                if list.len() == 2 {
+                                    opacity = parse_float(&list[1])?;
+                                    transparent = opacity < 1.0;
+                                }
+                            }
+                            "transparent" => {
+                                if list.len() == 2 {
+                                    transparent = match &list[1] {
+                                        Expr::Bool(b) => *b,
+                                        Expr::Sym(s) if s == "true" => true,
+                                        Expr::Sym(s) if s == "false" => false,
+                                        _ => false,
+                                    };
+                                }
+                            }
+                            "side" => {
+                                if list.len() == 2 {
+                                    side = match &list[1] {
+                                        Expr::Sym(s) => s.clone(),
+                                        _ => "front".to_string(),
+                                    };
+                                }
+                            }
+                            "wireframe" => {
+                                if list.len() == 2 {
+                                    wireframe = match &list[1] {
+                                        Expr::Bool(b) => *b,
+                                        Expr::Sym(s) if s == "true" => true,
+                                        Expr::Sym(s) if s == "false" => false,
+                                        _ => false,
+                                    };
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            
+            Ok(MaterialDef::MeshBasic {
+                color,
+                opacity,
+                transparent,
+                side,
+                wireframe,
+            })
+        }
+        "standard" | _ => {
+            // Default to standard material
+            let mut base_color = [1.0, 1.0, 1.0, 1.0];
+            let mut metallic = 0.0;
+            let mut roughness = 0.5;
+            let mut emissive = [0.0, 0.0, 0.0];
+            
+            for part in &parts[1..] {
+                if let Expr::List(ref list) = part {
+                    if list.is_empty() { continue; }
+                    
+                    if let Some(prop_name) = list[0].as_symbol() {
+                        match prop_name {
+                            "base-color" => {
+                                if list.len() == 5 {
+                                    base_color = parse_vec4(&list[1..])?;
+                                }
+                            }
+                            "metallic" => {
+                                if list.len() == 2 {
+                                    metallic = parse_float(&list[1])?;
+                                }
+                            }
+                            "roughness" => {
+                                if list.len() == 2 {
+                                    roughness = parse_float(&list[1])?;
+                                }
+                            }
+                            "emissive" => {
+                                if list.len() == 4 {
+                                    emissive = parse_vec3(&list[1..])?;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            
+            Ok(MaterialDef::Standard {
+                base_color,
+                metallic,
+                roughness,
+                emissive,
+            })
+        }
+    }
 }
 
 fn parse_input(parts: &[Expr]) -> anyhow::Result<InputDef> {

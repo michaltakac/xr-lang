@@ -205,6 +205,11 @@ impl SimpleUI3D {
             return;
         }
         
+        // Only render if we have UI elements to display
+        if self.ui_elements.is_empty() {
+            return;
+        }
+        
         // Only render if we have all the required components
         let (Some(pipeline), Some(vertex_buffer), Some(index_buffer), Some(uniform_buffer), Some(bind_group)) = 
             (&self.panel_pipeline, &self.panel_vertex_buffer, &self.panel_index_buffer, &self.panel_uniform_buffer, &self.panel_bind_group)
@@ -212,66 +217,72 @@ impl SimpleUI3D {
             return;
         };
         
-        // Create transformation matrices for the panel
-        // Position it to the right side of the scene
-        let panel_transform = Mat4::from_translation(Vec3::new(5.0, 0.0, -2.0)) * 
-                              Mat4::from_scale(Vec3::new(1.5, 1.5, 1.0));
+        // Render panels for each UI element
+        for ui_element in &self.ui_elements {
+            if ui_element.ui_type != "panel" {
+                continue; // Skip non-panel elements for now
+            }
+            
+            // Create transformation matrices for each panel
+            let panel_transform = Mat4::from_translation(ui_element.position) * 
+                                  Mat4::from_scale(Vec3::new(ui_element.size[0], ui_element.size[1], 1.0));
         
-        // Use the stored camera view-projection
-        let view_proj = self.camera_view_proj;
-        
-        // Prepare uniform data
-        #[repr(C)]
-        #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-        struct PanelUniforms {
-            view_proj: Mat4,
-            model: Mat4,
-        }
-        
-        let uniforms = PanelUniforms {
-            view_proj,
-            model: panel_transform,
-        };
-        
-        // Update uniform buffer
-        queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
-        
-        // Create command encoder and render
-        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("UI Panel Render Encoder"),
-        });
-        
-        {
-            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("UI Panel Render Pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Load, // Load existing content (cubes)
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: depth_view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Load, // Load existing depth
-                        store: StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
+            // Use the stored camera view-projection
+            let view_proj = self.camera_view_proj;
+            
+            // Prepare uniform data
+            #[repr(C)]
+            #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+            struct PanelUniforms {
+                view_proj: Mat4,
+                model: Mat4,
+            }
+            
+            let uniforms = PanelUniforms {
+                view_proj,
+                model: panel_transform,
+            };
+            
+            // Update uniform buffer
+            queue.write_buffer(uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+            
+            // Create command encoder and render
+            let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("UI Panel Render Encoder"),
             });
             
-            render_pass.set_pipeline(pipeline);
-            render_pass.set_bind_group(0, bind_group, &[]);
-            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
-            render_pass.draw_indexed(0..6, 0, 0..1); // 6 indices for 2 triangles
+            {
+                let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("UI Panel Render Pass"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Load, // Load existing content (cubes)
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(Operations {
+                            load: LoadOp::Load, // Load existing depth
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                
+                render_pass.set_pipeline(pipeline);
+                render_pass.set_bind_group(0, bind_group, &[]);
+                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                render_pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
+                render_pass.draw_indexed(0..6, 0, 0..1); // 6 indices for 2 triangles
+            }
+            
+            queue.submit(std::iter::once(encoder.finish()));
         }
-        
-        queue.submit(std::iter::once(encoder.finish()));
         
         // Render text for UI elements
         if let Some(ref text_renderer) = self.text_renderer {

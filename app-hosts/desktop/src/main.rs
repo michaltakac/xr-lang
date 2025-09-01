@@ -67,6 +67,9 @@ async fn main() -> Result<()> {
     
     if initial_scene.exists() {
         if let Ok(Some(update)) = scene_loader.load_scene_from_file(initial_scene.to_str().unwrap()) {
+            // Set the source path for code sync
+            renderer_3d.set_source_path(&initial_scene);
+            
             match update {
                 SceneUpdate::Full(scene_data) => {
                     renderer_3d.load_scene(scene_data, &gpu_ctx.device);

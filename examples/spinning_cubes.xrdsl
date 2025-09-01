@@ -21,9 +21,9 @@
 
 (defscene3d demo-scene
   (camera
-    (position 0 8 15)
-    (target 0 0 0)
-    (fov 40))
+    (position -9.34 2.61 13.97)  ; /* auto: 18:29:39 */
+    (target 0.00 0.00 0.00)  ; /* auto: 18:29:39 */
+    (fov 45.0)  ; /* auto: 18:29:39 */
     
   (input
     (camera-controls

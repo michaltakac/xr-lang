@@ -175,7 +175,7 @@ impl BehaviorSystem {
                 // Only collect properties with dot notation (e.g., rotation.x, position.y)
                 if key.contains('.') {
                     update.properties.insert(key.clone(), value.clone());
-                    println!("        DEBUG: Found {} = {:?} in behavior '{}'", key, value, behavior_name);
+                    // // println!(DEBUG: Found {} = {:?} in behavior '{}'", key, value, behavior_name);
                 }
             }
             
@@ -188,7 +188,7 @@ impl BehaviorSystem {
             
             
             if update.properties.is_empty() {
-                println!("        DEBUG: No properties found for behavior '{}'", behavior_name);
+                // // println!(DEBUG: No properties found for behavior '{}'", behavior_name);
             }
         }
         

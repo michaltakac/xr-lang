@@ -90,7 +90,7 @@ pub struct Entity {
     pub name: String,
     pub mesh: MeshSource,
     pub transform: Transform,
-    pub material: Material,
+    pub material: Option<dsl::ast::MaterialDef>,
     pub behavior: Option<String>,
     pub children: Vec<String>,  // IDs of child entities
     pub parent: Option<String>,  // ID of parent entity

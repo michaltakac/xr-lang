@@ -367,10 +367,7 @@ impl SceneLoader {
                     rotation: gpu::Quat::IDENTITY,  // TODO: Parse rotation
                     scale: gpu::Vec3::from(object.transform.scale),
                 },
-                material: gpu::entity::Material {
-                    color: [0.8, 0.8, 0.8, 1.0],  // TODO: Parse from material def
-                    ..gpu::entity::Material::default()
-                },
+                material: object.material.clone(),
                 behavior: object.behavior.clone(),
                 children: Vec::new(),
                 parent: None,
@@ -572,10 +569,7 @@ impl SceneLoader {
                         rotation: gpu::Quat::IDENTITY,
                         scale: gpu::Vec3::from(object.transform.scale),
                     },
-                    material: gpu::entity::Material {
-                        color: self.generate_color_for_entity(&object.name),
-                        ..gpu::entity::Material::default()
-                    },
+                    material: object.material.clone(),
                     behavior: object.behavior.clone(),
                     children: Vec::new(),
                     parent: None,

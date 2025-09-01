@@ -132,6 +132,7 @@ impl LowerCtx {
             Expr::F32(x) => Ok(Some(self.const_f32(f, *x))),
             Expr::I32(x) => Ok(Some(self.const_i32(f, *x))),
             Expr::Bool(x) => Ok(Some(self.const_i32(f, if *x { 1 } else { 0 }))),
+            Expr::Str(_) => Ok(None), // Strings are not used in behavior runtime
             Expr::Sym(s) => {
                 // Check locals first
                 if let Some((_, v, _)) = self.locals.iter().rev().find(|(n, _, _)| n == s) {

@@ -1,0 +1,234 @@
+; Math functions showcase - simplified version
+; Shows different mathematical functions animated
+
+; === ANIMATION BEHAVIORS ===
+
+; Sin wave animation
+(defbehavior sin-anim
+  (state (time 0.0) (base-y 0.0) (speed 2.0) (amplitude 2.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ base-y (* amplitude (sin (+ (* speed time) (* 0.2 position.x))))))))
+
+; Cos wave animation  
+(defbehavior cos-anim
+  (state (time 0.0) (base-y 6.0) (speed 2.0) (amplitude 2.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ base-y (* amplitude (cos (+ (* speed time) (* 0.2 position.x))))))))
+
+; Abs(sin) wave - bouncing effect
+(defbehavior abs-anim
+  (state (time 0.0) (base-y 12.0) (speed 2.0) (amplitude 2.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ base-y (abs (* amplitude (sin (+ (* speed time) (* 0.2 position.x)))))))))
+
+; Sqrt wave animation
+(defbehavior sqrt-anim
+  (state (time 0.0) (base-y 18.0) (speed 2.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ base-y (sqrt (abs (* 4 (sin (+ (* speed time) (* 0.15 position.x))))))))))
+
+; Step function using floor
+(defbehavior step-anim
+  (state (time 0.0) (base-y 24.0) (speed 1.5))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ base-y (floor (* 3 (sin (+ (* speed time) (* 0.2 position.x)))))))))
+
+; Camera orbit behavior
+(defbehavior orbit-camera
+  (state (angle 0.0) (distance 35.0) (height 20.0) (speed 0.3))
+  (update (dt)
+    (set! angle (+ angle (* speed dt)))
+    (set! position.x (* distance (cos angle)))
+    (set! position.z (* distance (sin angle)))
+    (set! position.y height)))
+
+(defscene3d math-showcase
+  (camera
+    (position 0 20 35)
+    (target 0 12 0)
+    (fov 55.0)
+    (behavior orbit-camera))
+    
+  (lighting
+    (ambient 0.35 0.35 0.4)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.1)))
+  
+  ; === SIN FUNCTION - Row 1 ===
+  (dotimes (i 60)
+    (object (format "sin_~a" i) sphere
+      (position (- (* i 0.5) 15) 0 0)
+      (scale 0.2 0.2 0.2)
+      (material mesh-basic
+        (color hsl 0 85 65)
+        (opacity 1.0))
+      (behavior sin-anim)))
+  
+  ; === COS FUNCTION - Row 2 ===
+  (dotimes (i 60)
+    (object (format "cos_~a" i) sphere
+      (position (- (* i 0.5) 15) 6 0)
+      (scale 0.2 0.2 0.2)
+      (material mesh-basic
+        (color hsl 60 85 65)
+        (opacity 1.0))
+      (behavior cos-anim)))
+  
+  ; === ABS FUNCTION - Row 3 ===
+  (dotimes (i 60)
+    (object (format "abs_~a" i) sphere
+      (position (- (* i 0.5) 15) 12 0)
+      (scale 0.2 0.2 0.2)
+      (material mesh-basic
+        (color hsl 180 85 65)
+        (opacity 1.0))
+      (behavior abs-anim)))
+  
+  ; === SQRT FUNCTION - Row 4 ===
+  (dotimes (i 60)
+    (object (format "sqrt_~a" i) sphere
+      (position (- (* i 0.5) 15) 18 0)
+      (scale 0.2 0.2 0.2)
+      (material mesh-basic
+        (color hsl 240 85 65)
+        (opacity 1.0))
+      (behavior sqrt-anim)))
+  
+  ; === FLOOR/STEP FUNCTION - Row 5 ===
+  (dotimes (i 60)
+    (object (format "step_~a" i) sphere
+      (position (- (* i 0.5) 15) 24 0)
+      (scale 0.2 0.2 0.2)
+      (material mesh-basic
+        (color hsl 300 85 65)
+        (opacity 1.0))
+      (behavior step-anim)))
+  
+  ; === Path followers - 5 spheres per function ===
+  ; These move along the function curves
+  (dotimes (j 5)
+    ; Sin path followers
+    (object (format "sin_follow_~a" j) sphere
+      (position 
+        (- (* j 6) 12) 
+        (* 2 (sin (* j 1.256))) 
+        -2)
+      (scale 0.35 0.35 0.35)
+      (material mesh-basic
+        (color hsl 20 90 75)
+        (opacity 1.0))
+      (behavior sin-anim))
+    
+    ; Cos path followers
+    (object (format "cos_follow_~a" j) sphere
+      (position 
+        (- (* j 6) 12) 
+        (+ 6 (* 2 (cos (* j 1.256)))) 
+        -2)
+      (scale 0.35 0.35 0.35)
+      (material mesh-basic
+        (color hsl 80 90 75)
+        (opacity 1.0))
+      (behavior cos-anim))
+    
+    ; Abs path followers
+    (object (format "abs_follow_~a" j) sphere
+      (position 
+        (- (* j 6) 12) 
+        (+ 12 (abs (* 2 (sin (* j 1.256))))) 
+        -2)
+      (scale 0.35 0.35 0.35)
+      (material mesh-basic
+        (color hsl 200 90 75)
+        (opacity 1.0))
+      (behavior abs-anim))
+    
+    ; Sqrt path followers
+    (object (format "sqrt_follow_~a" j) sphere
+      (position 
+        (- (* j 6) 12) 
+        (+ 18 (sqrt (* j 2))) 
+        -2)
+      (scale 0.35 0.35 0.35)
+      (material mesh-basic
+        (color hsl 260 90 75)
+        (opacity 1.0))
+      (behavior sqrt-anim))
+    
+    ; Step path followers
+    (object (format "step_follow_~a" j) sphere
+      (position 
+        (- (* j 6) 12) 
+        (+ 24 (floor (* j 0.8))) 
+        -2)
+      (scale 0.35 0.35 0.35)
+      (material mesh-basic
+        (color hsl 320 90 75)
+        (opacity 1.0))
+      (behavior step-anim)))
+  
+  ; === Visual guides - row separators ===
+  (dotimes (row 6)
+    (object (format "guide_~a" row) cube
+      (position 0 (- (* row 6) 3) 0)
+      (scale 35 0.02 0.02)
+      (material mesh-basic
+        (color hsl 0 0 40)
+        (opacity 0.3))))
+  
+  ; Ground plane
+  (object ground plane
+    (position 0 -3 0)
+    (scale 60 1 40)
+    (material mesh-basic
+      (color hsl 220 20 12)
+      (side double)))
+  
+  ; Labels for each function
+  (ui-element sin-label text
+    (position -18 0 0)
+    (size 2 0.8)
+    (text "SIN")
+    (color 1.0 0.5 0.5 1.0))
+  
+  (ui-element cos-label text
+    (position -18 6 0)
+    (size 2 0.8)
+    (text "COS")
+    (color 1.0 1.0 0.5 1.0))
+  
+  (ui-element abs-label text
+    (position -18 12 0)
+    (size 2 0.8)
+    (text "ABS")
+    (color 0.5 1.0 1.0 1.0))
+  
+  (ui-element sqrt-label text
+    (position -18 18 0)
+    (size 2 0.8)
+    (text "SQRT")
+    (color 0.5 0.5 1.0 1.0))
+  
+  (ui-element floor-label text
+    (position -18 24 0)
+    (size 2 0.8)
+    (text "FLOOR")
+    (color 1.0 0.5 1.0 1.0))
+  
+  (ui-element title text
+    (position 0 28 0)
+    (size 8 1.5)
+    (text "Math Functions Showcase")
+    (color 1.0 1.0 0.8 1.0)))

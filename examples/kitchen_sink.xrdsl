@@ -63,9 +63,9 @@
 (defscene3d kitchen-sink-demo
   ; Camera with runtime preservation
   (camera
-    (position 0 15 30)
-    (target 0 0 0)
-    (fov 60)
+    (position -12.83 20.80 24.72)  ; /* auto: 18:12:31 */
+    (target 0.00 0.00 0.00)  ; /* auto: 18:12:31 */
+    (fov 45.0)  ; /* auto: 18:12:31 */
     (meta preserve-runtime))  ; Camera position preserved during hot-reload
     
   ; Input controls

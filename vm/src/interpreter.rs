@@ -12,6 +12,7 @@ pub enum Value {
     Vec3(f32, f32, f32),
     Object(ObjectRef),
     Function(FunctionValue),
+    List(Vec<Value>),
     Nil,
 }
 
@@ -106,7 +107,7 @@ impl Interpreter {
         let mut state = HashMap::new();
         for (key, value) in &behavior.state {
             state.insert(key.clone(), Value::F32(*value));
-            println!("      DEBUG: Loading state {} = {} for behavior '{}'", key, value, behavior.name);
+            // println!(DEBUG: Loading state {} = {} for behavior '{}'", key, value, behavior.name);
         }
         
         let mut env = Environment::with_parent(self.global_env.clone());
@@ -153,12 +154,12 @@ impl Interpreter {
             
             // Debug: Check if speed is in environment
             if let Some(Value::F32(speed)) = env.get("speed") {
-                println!("      DEBUG: Using speed = {} for behavior '{}'", speed, name);
+                // println!(DEBUG: Using speed = {} for behavior '{}'", speed, name);
             }
             
             // Debug: Check if rotation.y is already in persistent env
             if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
-                println!("      DEBUG: rotation.y from persistent env = {}", rot_y);
+                // println!(DEBUG: rotation.y from persistent env = {}", rot_y);
             }
             
             // Bind parameters (typically just 'dt')
@@ -172,18 +173,18 @@ impl Interpreter {
                 // Debug: Log state values being used
                 if key == "speed" {
                     if let Value::F32(speed) = value {
-                        println!("    DEBUG: Using speed = {} for behavior '{}'", speed, name);
+                        // println!(DEBUG: Using speed = {} for behavior '{}'", speed, name);
                     }
                 }
             }
             
             // Debug: Check rotation.y before execution
             if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
-                println!("      DEBUG: rotation.y before = {}", rot_y);
+                // println!(DEBUG: rotation.y before = {}", rot_y);
             }
             
             // Debug: Print the body structure
-            println!("      DEBUG: Behavior body structure: {:?}", update_fn.body);
+            // println!(DEBUG: Behavior body structure: {:?}", update_fn.body);
             
             // Execute update function with the NEW body (from hot-swap)
             // Handle body that might be a sequence of statements
@@ -207,12 +208,12 @@ impl Interpreter {
             
             // Debug: Check what rotation.y value we have after execution
             if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
-                println!("      DEBUG: rotation.y after = {}", rot_y);
+                // println!(DEBUG: rotation.y after = {}", rot_y);
             }
             
             // Debug: Check speed value in env after execution
             if let Some(Value::F32(speed)) = env.get("speed") {
-                println!("      DEBUG: speed in env after execution = {}", speed);
+                // println!(DEBUG: speed in env after execution = {}", speed);
             }
             
             // Update behavior's persistent environment and state with changes
@@ -226,7 +227,7 @@ impl Interpreter {
                     if key.contains('.') || !behavior_mut.state.contains_key(key) {
                         behavior_mut.env.set(key.clone(), value.clone());
                         if key == "rotation.y" {
-                            println!("        DEBUG: Stored rotation.y = {:?} in persistent env", value);
+                            // println!(DEBUG: Stored rotation.y = {:?} in persistent env", value);
                         }
                     }
                 }
@@ -241,6 +242,7 @@ impl Interpreter {
             dsl::ast::Expr::F32(n) => Ok(Value::F32(*n)),
             dsl::ast::Expr::I32(n) => Ok(Value::I32(*n)),
             dsl::ast::Expr::Bool(b) => Ok(Value::Bool(*b)),
+            dsl::ast::Expr::Str(s) => Ok(Value::String(s.clone())),
             dsl::ast::Expr::Sym(s) => {
                 // Handle dotted notation for reading (e.g., rotation.y)
                 if s.contains('.') {
@@ -259,7 +261,7 @@ impl Interpreter {
                                 // Default rotation values
                                 match field {
                                     "x" | "y" | "z" => {
-                                        println!("        DEBUG: rotation.{} not found, returning default 0.0", field);
+                                        // println!(DEBUG: rotation.{} not found, returning default 0.0", field);
                                         Ok(Value::F32(0.0))
                                     },
                                     _ => Err(anyhow!("Unknown rotation field: {}", field)),
@@ -379,7 +381,7 @@ impl Interpreter {
                 }
                 // Debug multiplication for rotation calculations
                 if debug_values.len() == 2 && (debug_values[0] > 0.5 || debug_values[1] > 0.5) {
-                    println!("        DEBUG: * {} × {} = {}", debug_values[0], debug_values[1], product);
+                    // println!(DEBUG: * {} × {} = {}", debug_values[0], debug_values[1], product);
                 }
                 Ok(Value::F32(product))
             }
@@ -489,6 +491,142 @@ impl Interpreter {
                 
                 // Evaluate body in new environment
                 self.eval(&args[1], &mut new_env)
+            }
+            
+            // Loop constructs
+            "dotimes" => {
+                // (dotimes (i n) body...)
+                if args.len() < 2 {
+                    return Err(anyhow!("dotimes needs (var count) and body"));
+                }
+                
+                let dsl::ast::Expr::List(binding) = &args[0] else {
+                    return Err(anyhow!("dotimes binding must be a list"));
+                };
+                
+                if binding.len() != 2 {
+                    return Err(anyhow!("dotimes binding must be (var count)"));
+                }
+                
+                let dsl::ast::Expr::Sym(var) = &binding[0] else {
+                    return Err(anyhow!("dotimes variable must be a symbol"));
+                };
+                
+                let count = match self.eval(&binding[1], env)? {
+                    Value::F32(f) => f as i32,
+                    Value::I32(i) => i,
+                    _ => return Err(anyhow!("dotimes count must be a number")),
+                };
+                
+                let mut result = Value::Nil;
+                let mut loop_env = Environment::with_parent(env.clone());
+                
+                for i in 0..count {
+                    loop_env.set(var.clone(), Value::I32(i));
+                    for body_expr in &args[1..] {
+                        result = self.eval(body_expr, &mut loop_env)?;
+                    }
+                }
+                
+                Ok(result)
+            }
+            
+            "loop" => {
+                // Simple loop with collect support: (loop for i from 0 to 10 collect (* i i))
+                if args.is_empty() {
+                    return Err(anyhow!("loop needs clauses"));
+                }
+                
+                let mut i = 0;
+                let mut var_name = String::new();
+                let mut from = 0;
+                let mut to = 0;
+                let mut collect_expr = None;
+                let mut body_exprs = Vec::new();
+                
+                // Parse loop clauses
+                while i < args.len() {
+                    if let dsl::ast::Expr::Sym(keyword) = &args[i] {
+                        match keyword.as_str() {
+                            "for" => {
+                                if i + 1 >= args.len() {
+                                    return Err(anyhow!("loop for needs variable"));
+                                }
+                                if let dsl::ast::Expr::Sym(var) = &args[i + 1] {
+                                    var_name = var.clone();
+                                    i += 2;
+                                } else {
+                                    return Err(anyhow!("loop for variable must be symbol"));
+                                }
+                            }
+                            "from" => {
+                                if i + 1 >= args.len() {
+                                    return Err(anyhow!("loop from needs value"));
+                                }
+                                from = match self.eval(&args[i + 1], env)? {
+                                    Value::F32(f) => f as i32,
+                                    Value::I32(n) => n,
+                                    _ => return Err(anyhow!("loop from must be number")),
+                                };
+                                i += 2;
+                            }
+                            "to" => {
+                                if i + 1 >= args.len() {
+                                    return Err(anyhow!("loop to needs value"));
+                                }
+                                to = match self.eval(&args[i + 1], env)? {
+                                    Value::F32(f) => f as i32,
+                                    Value::I32(n) => n,
+                                    _ => return Err(anyhow!("loop to must be number")),
+                                };
+                                i += 2;
+                            }
+                            "collect" => {
+                                if i + 1 >= args.len() {
+                                    return Err(anyhow!("loop collect needs expression"));
+                                }
+                                collect_expr = Some(&args[i + 1]);
+                                i += 2;
+                            }
+                            "do" => {
+                                // Collect remaining expressions as body
+                                i += 1;
+                                while i < args.len() {
+                                    body_exprs.push(&args[i]);
+                                    i += 1;
+                                }
+                            }
+                            _ => {
+                                return Err(anyhow!("Unknown loop keyword: {}", keyword));
+                            }
+                        }
+                    } else {
+                        return Err(anyhow!("Loop clause must start with keyword"));
+                    }
+                }
+                
+                // Execute loop
+                let mut results = Vec::new();
+                let mut loop_env = Environment::with_parent(env.clone());
+                
+                for idx in from..=to {
+                    loop_env.set(var_name.clone(), Value::I32(idx));
+                    
+                    if let Some(expr) = collect_expr {
+                        let val = self.eval(expr, &mut loop_env)?;
+                        results.push(val);
+                    }
+                    
+                    for body_expr in &body_exprs {
+                        self.eval(body_expr, &mut loop_env)?;
+                    }
+                }
+                
+                if !results.is_empty() {
+                    Ok(Value::List(results))
+                } else {
+                    Ok(Value::Nil)
+                }
             }
             
             // Set! for mutation

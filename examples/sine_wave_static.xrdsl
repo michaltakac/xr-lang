@@ -1,0 +1,34 @@
+; Static sine wave generated using dotimes with math functions
+
+(defscene3d static-sine-wave
+  (camera
+    (position 0 8 25)
+    (target 0 0 0)
+    (fov 50.0))
+    
+  (lighting
+    (ambient 0.4 0.4 0.5)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.9 0.8)
+      (intensity 1.0)))
+  
+  ; Generate 100 spheres in sine wave formation using sin() in dotimes
+  (dotimes (i 100)
+    (object (format "sine_~a" i) sphere
+      (position 
+        (- (* i 0.3) 15)               ; X: spread from -15 to +15
+        (* 3 (sin (* 0.2 i)))          ; Y: sine wave height
+        0)                              ; Z: 0
+      (scale 0.25 0.25 0.25)
+      (material mesh-basic
+        (color hsl (* i 3.6) 80 60)    ; Rainbow gradient (360/100 = 3.6)
+        (opacity 1.0)
+        (side front))))
+  
+  (object ground plane
+    (position 0 -3 0)
+    (scale 50 1 30)
+    (material mesh-basic
+      (color hsl 220 25 20)
+      (side double))))

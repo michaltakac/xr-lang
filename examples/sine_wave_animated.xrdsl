@@ -1,0 +1,47 @@
+; Animated sine wave with traveling wave effect
+
+; Each sphere will hover with slight time offset based on position
+(defbehavior wave-hover
+  (state 
+    (time 0.0)
+    (base-y 0.0)
+    (wave-speed 3.0))
+  (update (dt)
+    (set! time (+ time dt))
+    ; Create traveling wave by using x position as phase offset
+    (set! position.y 
+      (+ base-y (* 2 (sin (+ (* wave-speed time) (* 0.3 position.x))))))))
+
+(defscene3d animated-sine-wave
+  (camera
+    (position 0 8 25)
+    (target 0 3 0)
+    (fov 50.0))
+    
+  (lighting
+    (ambient 0.4 0.4 0.5)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.9 0.8)
+      (intensity 1.0)))
+  
+  ; Generate spheres in initial sine wave formation
+  (dotimes (i 60)
+    (object (format "wave_~a" i) sphere
+      (position 
+        (- (* i 0.5) 15)               ; X: spread from -15 to +15
+        (* 3 (sin (* 0.3 i)))          ; Y: initial sine position
+        0)                              ; Z: 0
+      (scale 0.3 0.3 0.3)
+      (material mesh-basic
+        (color hsl (* i 6) 80 60)      ; Rainbow gradient
+        (opacity 1.0)
+        (side front))
+      (behavior wave-hover)))           ; Apply wave animation
+  
+  (object ground plane
+    (position 0 -2 0)
+    (scale 40 1 20)
+    (material mesh-basic
+      (color hsl 220 25 20)
+      (side double))))

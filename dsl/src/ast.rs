@@ -8,6 +8,7 @@ pub enum Expr {
     I32(i32),
     Bool(bool),
     Sym(String),
+    Str(String),
     List(Vec<Expr>),
 }
 
@@ -91,11 +92,20 @@ pub struct DirectionalLight {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MaterialDef {
-    pub base_color: [f32; 4],
-    pub metallic: f32,
-    pub roughness: f32,
-    pub emissive: [f32; 3],
+pub enum MaterialDef {
+    Standard {
+        base_color: [f32; 4],
+        metallic: f32,
+        roughness: f32,
+        emissive: [f32; 3],
+    },
+    MeshBasic {
+        color: [f32; 4],
+        opacity: f32,
+        transparent: bool,
+        side: String, // "front", "back", or "double"
+        wireframe: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,6 +206,7 @@ impl std::fmt::Display for Expr {
             Expr::I32(x) => write!(f, "{}", x),
             Expr::Bool(x) => write!(f, "{}", x),
             Expr::Sym(s) => write!(f, "{}", s),
+            Expr::Str(s) => write!(f, "\"{}\"", s),
             Expr::List(v) => {
                 write!(f, "(")?;
                 for (i, e) in v.iter().enumerate() {

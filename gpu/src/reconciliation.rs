@@ -2,7 +2,7 @@
 //! Efficiently diffs and updates only changed parts of the scene
 
 use crate::scene::SceneData;
-use crate::entity::{Entity, MeshSource, Transform, Material, MetaDirective, ModelSource};
+use crate::entity::{Entity, MeshSource, Transform, MetaDirective, ModelSource};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -24,7 +24,7 @@ pub enum SceneChange {
 #[derive(Debug, Clone)]
 pub struct EntityChanges {
     pub transform: Option<Transform>,
-    pub material: Option<Material>,
+    pub material: Option<dsl::ast::MaterialDef>,
     pub behavior: Option<Option<String>>,
     pub mesh: Option<MeshSource>,
     pub meta: Option<Option<MetaDirective>>,
@@ -208,8 +208,8 @@ impl SceneReconciler {
         }
 
         // Check material changes
-        if old.material.color != new.material.color {
-            changes.material = Some(new.material.clone());
+        if !self.materials_equal(&old.material, &new.material) {
+            changes.material = new.material.clone();
             has_changes = true;
         }
 
@@ -335,6 +335,26 @@ impl SceneReconciler {
                 (light_a.directional_intensity - light_b.directional_intensity).abs() < 0.01
             }
             _ => false
+        }
+    }
+
+    fn materials_equal(&self, a: &Option<dsl::ast::MaterialDef>, b: &Option<dsl::ast::MaterialDef>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (Some(mat_a), Some(mat_b)) => {
+                match (mat_a, mat_b) {
+                    (dsl::ast::MaterialDef::MeshBasic { color: c1, opacity: o1, transparent: t1, side: s1, wireframe: w1 },
+                     dsl::ast::MaterialDef::MeshBasic { color: c2, opacity: o2, transparent: t2, side: s2, wireframe: w2 }) => {
+                        c1 == c2 && o1 == o2 && t1 == t2 && s1 == s2 && w1 == w2
+                    }
+                    (dsl::ast::MaterialDef::Standard { base_color: bc1, metallic: m1, roughness: r1, emissive: e1 },
+                     dsl::ast::MaterialDef::Standard { base_color: bc2, metallic: m2, roughness: r2, emissive: e2 }) => {
+                        bc1 == bc2 && m1 == m2 && r1 == r2 && e1 == e2
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
         }
     }
 

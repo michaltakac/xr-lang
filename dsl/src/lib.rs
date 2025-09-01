@@ -6,6 +6,8 @@ pub mod ast;
 pub mod parser;
 pub mod macros;
 pub mod lower;
+pub mod color;
+pub mod scene_macros;
 
 pub use ast::*;
 pub use parser::parse;

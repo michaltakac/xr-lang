@@ -1,0 +1,74 @@
+; Simple loop grid test using dotimes macro
+
+(defbehavior hover
+  (state 
+    (base-y 0.0)
+    (time 0.0)
+    (hover-speed 2.0)
+    (hover-height 0.5))
+  (update (dt)
+    (set! time (+ time dt))
+    ; Hovering motion
+    (set! position.y (+ base-y (* hover-height (sin (* time hover-speed)))))))
+
+(defbehavior spin
+  (state 
+    (spin-speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* spin-speed dt)))))
+
+(defscene3d loop-grid-demo
+  (camera
+    (position 10.0 8.0 15.0)
+    (target 0.0 0.0 0.0)
+    (fov 45.0))
+    
+  (lighting
+    (ambient 0.3 0.3 0.4)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.2)))
+  
+  ; Generate a row of 5 cubes using dotimes
+  (dotimes (x 5)
+    (object (format "cube_~a" x) cube
+      (position (- (* x 2) 4) 0 0)
+      (scale 0.8 0.8 0.8)
+      (behavior hover)))
+  
+  ; Generate a row of 3 spheres
+  (dotimes (i 3)
+    (object (format "sphere_~a" i) sphere
+      (position 0 2 (- (* i 2) 2))
+      (scale 0.5 0.5 0.5)
+      (behavior spin)))
+    
+  ; Generate 100 spheres in a looping sine wave shape
+  (dotimes (i 100)
+    (object (format "wave-sphere_~a" i) sphere
+      (position 
+        (- (* i 0.3) 15) 
+        (+ 3 (* 2 (sin (* 0.2 i)))) 
+        0)
+      (scale 0.3 0.3 0.3)
+      (behavior 
+        (defbehavior wave-loop
+          (state (time 0.0))
+          (update (dt)
+            (set! time (+ time dt))
+            (set! position.y 
+              (+ 3 (* 2 (sin (+ (* 0.2 i) time)))))))))
+  
+  (object ground plane
+    (position 0 -1 0)
+    (scale 20 1 20)
+    (material mesh-basic
+      (color hsl 120 30 20)
+      (side double)))
+    
+  (ui-element info-text text
+    (position 0 5 0)
+    (size 4 1)
+    (text "Loop-Generated Grid Demo")
+    (color 1.0 1.0 0.0 1.0)))

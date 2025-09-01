@@ -5,6 +5,9 @@ use crate::ui3d::UI3DSystem;
 use crate::scene::*;
 use crate::runtime_state::RuntimeState;
 use crate::behavior_system::BehaviorSystem;
+use crate::code_sync::CodeSync;
+use crate::perf_overlay_live::LivePerfOverlay;
+use crate::materials::{MeshBasicMaterial, Side};
 use wgpu::*;
 use wgpu::util::DeviceExt;
 use bytemuck::{Pod, Zeroable};
@@ -62,6 +65,7 @@ pub struct Mesh {
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
     pub transform: Transform,
+    pub material: Option<MeshBasicMaterial>,
 }
 
 impl Mesh {
@@ -84,6 +88,7 @@ impl Mesh {
             vertex_buffer,
             index_buffer,
             transform: Transform::IDENTITY,
+            material: None,
         }
     }
     
@@ -176,6 +181,7 @@ pub struct Renderer3D {
     pub render_pipeline: RenderPipeline,
     pub uniform_buffer: Buffer,
     pub uniform_bind_group: BindGroup,
+    pub uniform_bind_group_layout: BindGroupLayout,
     pub camera: Camera,
     pub camera_target: Vec3,
     pub meshes: Vec<Mesh>,
@@ -188,6 +194,10 @@ pub struct Renderer3D {
     pub orbit_state: OrbitState,
     pub runtime_state: RuntimeState,
     pub behavior_system: BehaviorSystem,
+    pub code_sync: CodeSync,
+    pub perf_overlay: LivePerfOverlay,
+    pub device: *const Device,
+    pub surface_format: TextureFormat,
 }
 
 pub struct OrbitState {
@@ -312,6 +322,7 @@ impl Renderer3D {
             render_pipeline,
             uniform_buffer,
             uniform_bind_group,
+            uniform_bind_group_layout,
             camera,
             camera_target,
             meshes: Vec::new(),
@@ -333,6 +344,10 @@ impl Renderer3D {
             },
             runtime_state: RuntimeState::new(),
             behavior_system: BehaviorSystem::new(),
+            code_sync: CodeSync::new(),
+            perf_overlay: LivePerfOverlay::new(device, config.format),
+            device: device as *const Device,
+            surface_format: config.format,
         };
         
         // Initialize scene from default data
@@ -342,6 +357,10 @@ impl Renderer3D {
     
     pub fn add_mesh(&mut self, mesh: Mesh) {
         self.meshes.push(mesh);
+    }
+    
+    pub fn set_source_path(&mut self, path: impl AsRef<std::path::Path>) {
+        self.code_sync.set_source_path(path);
     }
     
     pub fn load_scene(&mut self, mut scene_data: SceneData, device: &Device) {
@@ -362,6 +381,13 @@ impl Renderer3D {
         if self.runtime_state.should_preserve_camera() {
             self.runtime_state.preserve_camera(self.camera.position, self.camera_target, 
                 std::f32::consts::FRAC_PI_4); // TODO: Store FOV properly
+            
+            // Queue camera update for code sync if in Live mode
+            if self.runtime_state.authoring_mode == crate::runtime_state::AuthoringMode::Live {
+                if let Some(camera_state) = &self.runtime_state.camera_overrides {
+                    self.code_sync.queue_camera_update(camera_state);
+                }
+            }
         }
         
         // Apply preserved state to new scene data
@@ -574,6 +600,31 @@ impl Renderer3D {
             mesh.transform.scale = entity.transform.scale;
             mesh.transform.rotation = entity.transform.rotation;
             
+            // Apply material if specified
+            if let Some(ref material_def) = entity.material {
+                let device = unsafe { &*self.device };
+                
+                match material_def {
+                    dsl::ast::MaterialDef::MeshBasic { color, opacity, transparent, side, wireframe } => {
+                        let mut mat = MeshBasicMaterial::new()
+                            .with_color(color[0], color[1], color[2])
+                            .with_opacity(*opacity);
+                        
+                        mat.transparent = *transparent;
+                        mat.wireframe = *wireframe;
+                        mat.side = match side.as_str() {
+                            "double" => Side::Double,
+                            "back" => Side::Back,
+                            _ => Side::Front,
+                        };
+                        
+                        mat.init(device, self.surface_format, &self.uniform_bind_group_layout);
+                        mesh.material = Some(mat);
+                    }
+                    _ => {} // Standard material not yet implemented
+                }
+            }
+            
             self.meshes.push(mesh);
         }
         
@@ -615,7 +666,23 @@ impl Renderer3D {
     
     
     pub fn update(&mut self, dt: f32, device: &Device) {
+        // Track frame timing for performance overlay
+        self.perf_overlay.frame_start();
+        
         self.time += dt;
+        
+        // Try to sync code changes if in Live mode
+        if self.runtime_state.authoring_mode == crate::runtime_state::AuthoringMode::Live {
+            // Sync periodically (e.g., every 60 frames)
+            static mut SYNC_COUNTER: u32 = 0;
+            unsafe {
+                SYNC_COUNTER += 1;
+                if SYNC_COUNTER >= 60 {
+                    SYNC_COUNTER = 0;
+                    let _ = self.code_sync.sync_to_file(&self.runtime_state);
+                }
+            }
+        }
         
         // Update camera based on scene data or use orbital fallback
         if let Some(ref camera_data) = self.scene_data.camera {
@@ -699,8 +766,8 @@ impl Renderer3D {
                             );
                         }
                         }
-                        Err(e) => {
-                            println!("      ERROR: Behavior update failed for '{}': {}", behavior_name, e);
+                        Err(_e) => {
+                            // println!("      ERROR: Behavior update failed for '{}': {}", behavior_name, _e);
                             // Fallback to simple rotation if behavior fails
                             let rotation_speed = 1.0 * dt;
                             let rotation_delta = Quat::from_axis_angle(Vec3::Y, rotation_speed);
@@ -723,7 +790,10 @@ impl Renderer3D {
         self.ui_system.update(dt, &self.camera, device);
     }
 
-    pub fn render(&self, device: &Device, queue: &Queue, view: &TextureView, depth_view: &TextureView) {
+    pub fn render(&mut self, device: &Device, queue: &Queue, view: &TextureView, depth_view: &TextureView) {
+        // Reset frame stats for performance overlay
+        self.perf_overlay.reset_frame_stats();
+        
         // Clear first
         if self.meshes.is_empty() {
             // Just clear if no meshes
@@ -769,6 +839,11 @@ impl Renderer3D {
             // Update uniforms for this specific mesh BEFORE creating the command encoder
             queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
             
+            // Update material uniforms if material exists
+            if let Some(ref material) = mesh.material {
+                material.update(queue);
+            }
+            
             let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
                 label: Some(&format!("3D Render Encoder for Mesh {}", i)),
             });
@@ -800,10 +875,32 @@ impl Renderer3D {
                     occlusion_query_set: None,
                 });
                 
-                render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                // Use material pipeline if available, otherwise use default
+                if let Some(ref material) = mesh.material {
+                    if let Some(pipeline) = material.get_pipeline() {
+                        render_pass.set_pipeline(pipeline);
+                        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                        if let Some(bind_group) = material.get_bind_group() {
+                            render_pass.set_bind_group(1, bind_group, &[]);
+                        }
+                    } else {
+                        // Fallback to default pipeline if material is not initialized
+                        render_pass.set_pipeline(&self.render_pipeline);
+                        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                    }
+                } else {
+                    // Use default pipeline
+                    render_pass.set_pipeline(&self.render_pipeline);
+                    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                }
+                
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint16);
+                
+                // Track performance metrics
+                self.perf_overlay.record_draw_call();
+                self.perf_overlay.record_triangles(mesh.indices.len() as u32 / 3);
+                
                 render_pass.draw_indexed(0..mesh.indices.len() as u32, 0, 0..1);
             }
             
@@ -812,11 +909,17 @@ impl Renderer3D {
         
         // Render UI on top
         self.ui_system.render(device, queue, view, depth_view);
+        
+        // Render performance overlay on top of everything
+        self.perf_overlay.render(device, queue, view);
     }
     
     pub fn resize(&mut self, new_width: u32, new_height: u32) {
         // Update aspect ratio
         self.aspect_ratio = new_width as f32 / new_height as f32;
+        
+        // Update performance overlay with new screen size
+        self.perf_overlay.resize(new_width, new_height);
         
         // Update camera projection matrix with new aspect ratio
         self.camera.set_aspect_ratio(self.aspect_ratio);
@@ -847,6 +950,15 @@ impl Renderer3D {
             self.runtime_state.toggle_preservation_mode();
             self.ui_system.add_log_entry(&format!("📌 Runtime preservation mode: {:?}", 
                 self.runtime_state.authoring_mode));
+            return;
+        }
+        
+        // Toggle performance overlay with F1
+        if matches!(event.physical_key, PhysicalKey::Code(KeyCode::F1)) 
+            && matches!(event.state, winit::event::ElementState::Pressed) {
+            self.perf_overlay.toggle();
+            let status = if self.perf_overlay.is_enabled() { "ON" } else { "OFF" };
+            self.ui_system.add_log_entry(&format!("📊 Performance overlay: {}", status));
             return;
         }
         
@@ -1023,6 +1135,22 @@ impl Renderer3D {
                     0.1,
                     100.0,
                 );
+                
+                // Track camera state for preservation and sync
+                if self.runtime_state.should_preserve_camera() {
+                    self.runtime_state.preserve_camera(
+                        self.camera.position, 
+                        self.camera_target,
+                        std::f32::consts::FRAC_PI_4  // TODO: Store FOV properly
+                    );
+                    
+                    // Queue for code sync if in Live mode
+                    if self.runtime_state.authoring_mode == crate::runtime_state::AuthoringMode::Live {
+                        if let Some(camera_state) = &self.runtime_state.camera_overrides {
+                            self.code_sync.queue_camera_update(camera_state);
+                        }
+                    }
+                }
             }
         }
     }

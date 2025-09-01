@@ -1,0 +1,61 @@
+; Full animated sine wave demo combining static generation with animation
+
+(defbehavior wave-animate
+  (state 
+    (time 0.0)
+    (initial-y 0.0)  ; Store initial Y position
+    (wave-speed 3.0)
+    (wave-length 0.2))
+  (update (dt)
+    (set! time (+ time dt))
+    ; Create traveling wave effect using x position as phase
+    (set! position.y 
+      (+ initial-y (* 2 (sin (+ (* wave-speed time) (* wave-length position.x))))))))
+
+(defscene3d animated-sine-wave
+  (camera
+    (position 0 8 30)
+    (target 0 0 0)
+    (fov 45.0))
+    
+  (lighting
+    (ambient 0.3 0.3 0.4)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.2)))
+  
+  ; Generate 120 spheres forming initial sine wave
+  (dotimes (i 120)
+    (object (format "wave_~a" i) sphere
+      (position 
+        (- (* i 0.25) 15)               ; X: spread from -15 to +15
+        (* 3 (sin (* 0.25 i)))          ; Y: initial sine wave position
+        0)                               ; Z: 0
+      (scale 0.2 0.2 0.2)
+      (material mesh-basic
+        (color hsl (* i 3) 85 65)       ; Rainbow gradient
+        (opacity 1.0)
+        (side front))
+      (behavior wave-animate)))         ; Apply animation behavior
+  
+  ; Add secondary wave layer with different phase
+  (dotimes (j 60)
+    (object (format "wave2_~a" j) sphere
+      (position 
+        (- (* j 0.5) 15)                ; X: spread from -15 to +15
+        (* 2 (cos (* 0.3 j)))           ; Y: cosine wave for variety
+        2)                               ; Z: slightly back
+      (scale 0.15 0.15 0.15)
+      (material mesh-basic
+        (color hsl (+ 180 (* j 6)) 70 50)  ; Different color range
+        (opacity 0.8)
+        (side front))
+      (behavior wave-animate)))
+  
+  (object ground plane
+    (position 0 -4 0)
+    (scale 60 1 40)
+    (material mesh-basic
+      (color hsl 220 20 15)
+      (side double))))
