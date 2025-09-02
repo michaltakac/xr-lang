@@ -17,7 +17,7 @@ use hotreload::{HotReloader, SceneLoader, SceneUpdate};
 async fn main() -> Result<()> {
     env_logger::init();
     
-    println!("🚀 Starting XR-DSL Desktop 3D Test...");
+    println!("\x1b[1m\x1b[36mINIT\x1b[0m Starting XR-DSL Desktop 3D");
     
     let event_loop = EventLoop::new()?;
     let window = std::sync::Arc::new(event_loop.create_window(
@@ -26,13 +26,13 @@ async fn main() -> Result<()> {
             .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
     )?);
     
-    println!("🔧 Initializing GPU context...");
+    println!("\x1b[36mINIT\x1b[0m GPU context...");
     let mut gpu_ctx = gpu::init(&*window).await?;
-    println!("✅ GPU context initialized!");
+    println!("\x1b[32mOK\x1b[0m GPU context initialized");
     
     // Create 3D renderer
     let mut renderer_3d = gpu::Renderer3D::new(&gpu_ctx.device, &gpu_ctx.queue, &gpu_ctx.config);
-    println!("✅ 3D renderer created!");
+    println!("\x1b[32mOK\x1b[0m 3D renderer created");
     
     // Load scene from command-line argument or default to spinning_cubes.xrdsl
     let args: Vec<String> = std::env::args().collect();
@@ -79,26 +79,26 @@ async fn main() -> Result<()> {
                     renderer_3d.load_scene(scene_data, &gpu_ctx.device);
                 }
             }
-            println!("✅ Loaded initial scene from: {}", initial_scene.display());
+            println!("\x1b[32mOK\x1b[0m Loaded scene from: {}", initial_scene.display());
         } else {
-            println!("⚠️  Could not parse {}, using default scene", initial_scene.display());
+            println!("\x1b[33mWARN\x1b[0m Could not parse {}, using default scene", initial_scene.display());
         }
     } else {
-        println!("⚠️  Scene file {} not found, using default scene", initial_scene.display());
+        println!("\x1b[33mWARN\x1b[0m Scene file {} not found, using default scene", initial_scene.display());
     }
     
-    println!("🎨 3D scene ready! You should see animated cubes.");
-    println!("🎮 Use this app to test 3D rendering!");
-    println!("💡 You should see spinning cubes with orbital camera movement");
-    println!("📊 The scene uses WebGPU for cross-platform rendering");
-    println!("🛠️  3D UI system has been integrated with ECS architecture using hecs!");
-    println!("📝 The system includes: 3D code editor, button components, log viewer");
-    println!("⌨️  Input handling: mouse raycasting, keyboard input, text editing");
-    println!("🔥 HOT-RELOAD ACTIVE: Edit any .xrdsl file in examples/ to see live updates!");
-    println!("✨ Live DSL compilation and 3D scene updates working!");
-    println!("📌 TIP: Run with a scene file: cargo run -p desktop -- examples/rotation_test.xrdsl");
+    println!("\x1b[32mOK\x1b[0m 3D scene ready");
+    println!("\x1b[36mINFO\x1b[0m Interactive 3D rendering test");
+    println!("\x1b[36mINFO\x1b[0m Orbital camera controls enabled");
+    println!("\x1b[36mINFO\x1b[0m WebGPU renderer active");
+    println!("\x1b[36mINFO\x1b[0m ECS architecture with hecs");
+    println!("\x1b[36mINFO\x1b[0m Components: 3D editor, buttons, log viewer");
+    println!("\x1b[36mINFO\x1b[0m Input: mouse raycasting, keyboard, text editing");
+    println!("\x1b[33mWATCH\x1b[0m Hot-reload active for .xrdsl files");
+    println!("\x1b[32mOK\x1b[0m Live compilation enabled");
+    println!("\x1b[36mINFO\x1b[0m Usage: cargo run -p desktop -- examples/file.xrdsl");
     println!("");
-    println!("🆕 RUNTIME STATE PRESERVATION:");
+    println!("\x1b[36mINFO\x1b[0m Runtime State Preservation:");
     println!("   Press [P] to toggle preservation modes: Design -> Play -> Live");
     println!("   • Design: All changes reset on reload (default)");
     println!("   • Play: Runtime changes preserved, not saved");

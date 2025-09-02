@@ -1,1136 +1,634 @@
-//! S-expression parser for XR-DSL
+//! Enhanced parser with full position tracking
 
 use crate::ast::*;
+use crate::error::{DslError, DslResult, ErrorKind, Position, Span};
+use crate::position_tracker::PositionTracker;
+use crate::parser_helpers::*;
 
-#[derive(Clone, Debug)]
-enum Tok {
-    LPar,
-    RPar,
-    Sym(String),
-    Str(String),
-    Num(f32),
-    Int(i32),
-    True,
-    False,
+#[derive(Debug, Clone)]
+pub enum Token {
+    LPar(Span),
+    RPar(Span),
+    Sym(String, Span),
+    Str(String, Span),
+    Num(f32, Span),
+    Int(i32, Span),
+    True(Span),
+    False(Span),
+    Eof,
 }
 
-#[derive(Clone)]
-struct Lexer<'a> {
-    s: &'a [u8],
-    i: usize,
+impl Token {
+    fn span(&self) -> Option<Span> {
+        match self {
+            Token::LPar(s) | Token::RPar(s) | Token::Sym(_, s) | Token::Str(_, s) 
+            | Token::Num(_, s) | Token::Int(_, s) | Token::True(s) | Token::False(s) => Some(*s),
+            Token::Eof => None,
+        }
+    }
 }
 
-impl<'a> Lexer<'a> {
-    fn new(src: &'a str) -> Self {
+pub struct EnhancedLexer {
+    tracker: PositionTracker,
+    peeked: Option<Token>,
+}
+
+impl EnhancedLexer {
+    pub fn new(source: String) -> Self {
         Self {
-            s: src.as_bytes(),
-            i: 0,
+            tracker: PositionTracker::new(source),
+            peeked: None,
         }
     }
     
-    fn peek(&self) -> Option<Tok> {
-        let mut clone = self.clone();
-        clone.next()
+    pub fn peek(&mut self) -> DslResult<Token> {
+        if self.peeked.is_none() {
+            self.peeked = Some(self.next_token()?);
+        }
+        Ok(self.peeked.clone().unwrap())
     }
     
-    fn skip_whitespace(&mut self) {
-        while self.i < self.s.len() && self.s[self.i].is_ascii_whitespace() {
-            self.i += 1;
+    pub fn next(&mut self) -> DslResult<Token> {
+        if let Some(token) = self.peeked.take() {
+            Ok(token)
+        } else {
+            self.next_token()
         }
     }
     
-    fn skip_comment(&mut self) {
-        if self.i < self.s.len() && self.s[self.i] == b';' {
-            while self.i < self.s.len() && self.s[self.i] != b'\n' {
-                self.i += 1;
+    fn next_token(&mut self) -> DslResult<Token> {
+        self.skip_whitespace_and_comments();
+        
+        if self.tracker.is_at_end() {
+            return Ok(Token::Eof);
+        }
+        
+        let start = self.tracker.current_position();
+        
+        match self.tracker.peek_char() {
+            Some('(') => {
+                self.tracker.advance_char('(');
+                Ok(Token::LPar(self.tracker.create_span(start)))
             }
+            Some(')') => {
+                self.tracker.advance_char(')');
+                Ok(Token::RPar(self.tracker.create_span(start)))
+            }
+            Some('"') => self.read_string(start),
+            Some('-') => {
+                // Check if this is a negative number or just the minus operator
+                let remaining = self.tracker.remaining();
+                if remaining.len() > 1 {
+                    let next_ch = remaining.chars().nth(1);
+                    if let Some(ch) = next_ch {
+                        if ch.is_digit(10) {
+                            // It's a negative number like -5
+                            self.read_number(start)
+                        } else if ch == '.' && remaining.len() > 2 {
+                            // Check for -.5 pattern
+                            if let Some(ch2) = remaining.chars().nth(2) {
+                                if ch2.is_digit(10) {
+                                    self.read_number(start)
+                                } else {
+                                    self.read_symbol(start)
+                                }
+                            } else {
+                                self.read_symbol(start)
+                            }
+                        } else {
+                            // It's the minus operator or part of a symbol
+                            self.read_symbol(start)
+                        }
+                    } else {
+                        self.read_symbol(start)
+                    }
+                } else {
+                    // Just a minus at end of input
+                    self.read_symbol(start)
+                }
+            }
+            Some(c) if c.is_digit(10) => self.read_number(start),
+            Some(c) if is_symbol_start(c) => self.read_symbol(start),
+            Some(c) => {
+                let span = self.tracker.create_span(start);
+                Err(DslError::new(
+                    ErrorKind::UnexpectedChar,
+                    format!("unexpected character: '{}'", c)
+                ).with_span(span))
+            }
+            None => Ok(Token::Eof),
+        }
+    }
+    
+    fn skip_whitespace_and_comments(&mut self) {
+        while let Some(ch) = self.tracker.peek_char() {
+            if ch.is_whitespace() {
+                self.tracker.advance_char(ch);
+            } else if ch == ';' {
+                // Skip comment line
+                while let Some(ch) = self.tracker.peek_char() {
+                    self.tracker.advance_char(ch);
+                    if ch == '\n' {
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+    }
+    
+    fn read_string(&mut self, start: Position) -> DslResult<Token> {
+        self.tracker.advance_char('"'); // Skip opening quote
+        let mut value = String::new();
+        
+        while let Some(ch) = self.tracker.peek_char() {
+            if ch == '"' {
+                self.tracker.advance_char('"');
+                let span = self.tracker.create_span(start);
+                return Ok(Token::Str(value, span));
+            } else if ch == '\\' {
+                self.tracker.advance_char('\\');
+                if let Some(escaped) = self.tracker.peek_char() {
+                    self.tracker.advance_char(escaped);
+                    value.push(match escaped {
+                        'n' => '\n',
+                        't' => '\t',
+                        'r' => '\r',
+                        '\\' => '\\',
+                        '"' => '"',
+                        c => c,
+                    });
+                }
+            } else {
+                self.tracker.advance_char(ch);
+                value.push(ch);
+            }
+        }
+        
+        let span = self.tracker.create_span(start);
+        Err(DslError::new(
+            ErrorKind::UnterminatedString,
+            "unterminated string literal".to_string()
+        ).with_span(span))
+    }
+    
+    fn read_number(&mut self, start: Position) -> DslResult<Token> {
+        let mut value = String::new();
+        let mut has_dot = false;
+        
+        // Handle negative sign
+        if self.tracker.peek_char() == Some('-') {
+            value.push('-');
+            self.tracker.advance_char('-');
+        }
+        
+        while let Some(ch) = self.tracker.peek_char() {
+            if ch.is_digit(10) {
+                value.push(ch);
+                self.tracker.advance_char(ch);
+            } else if ch == '.' && !has_dot {
+                has_dot = true;
+                value.push(ch);
+                self.tracker.advance_char(ch);
+            } else if is_delimiter(ch) {
+                break;
+            } else {
+                let span = self.tracker.create_span(start);
+                return Err(DslError::new(
+                    ErrorKind::InvalidNumber,
+                    format!("invalid number literal: {}", value)
+                ).with_span(span));
+            }
+        }
+        
+        let span = self.tracker.create_span(start);
+        
+        if has_dot {
+            match value.parse::<f32>() {
+                Ok(n) => Ok(Token::Num(n, span)),
+                Err(_) => Err(DslError::new(
+                    ErrorKind::InvalidNumber,
+                    format!("invalid float literal: {}", value)
+                ).with_span(span)),
+            }
+        } else {
+            match value.parse::<i32>() {
+                Ok(n) => Ok(Token::Int(n, span)),
+                Err(_) => Err(DslError::new(
+                    ErrorKind::InvalidNumber,
+                    format!("invalid integer literal: {}", value)
+                ).with_span(span)),
+            }
+        }
+    }
+    
+    fn read_symbol(&mut self, start: Position) -> DslResult<Token> {
+        let mut value = String::new();
+        
+        while let Some(ch) = self.tracker.peek_char() {
+            if is_symbol_char(ch) {
+                value.push(ch);
+                self.tracker.advance_char(ch);
+            } else if is_delimiter(ch) {
+                break;
+            } else {
+                break;
+            }
+        }
+        
+        let span = self.tracker.create_span(start);
+        
+        match value.as_str() {
+            "true" => Ok(Token::True(span)),
+            "false" => Ok(Token::False(span)),
+            _ => Ok(Token::Sym(value, span)),
         }
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Tok;
+fn is_symbol_start(c: char) -> bool {
+    c.is_alphabetic() || c == '_' || c == '-' || c == '+' || c == '*' || c == '/' 
+    || c == '=' || c == '<' || c == '>' || c == '!' || c == '?' || c == ':' || c == '.'
+}
+
+fn is_symbol_char(c: char) -> bool {
+    is_symbol_start(c) || c.is_digit(10) || c == '.'
+}
+
+fn is_delimiter(c: char) -> bool {
+    c.is_whitespace() || c == '(' || c == ')' || c == '"' || c == ';'
+}
+
+pub struct EnhancedParser {
+    lexer: EnhancedLexer,
+}
+
+impl EnhancedParser {
+    pub fn new(source: String) -> Self {
+        Self {
+            lexer: EnhancedLexer::new(source),
+        }
+    }
     
-    fn next(&mut self) -> Option<Tok> {
+    pub fn parse(&mut self) -> DslResult<Vec<Top>> {
+        let mut tops = Vec::new();
+        
         loop {
-            self.skip_whitespace();
-            if self.i >= self.s.len() {
-                return None;
+            match self.lexer.peek()? {
+                Token::Eof => break,
+                Token::LPar(_) => {
+                    tops.push(self.parse_top()?);
+                }
+                token => {
+                    let span = token.span();
+                    return Err(DslError::new(
+                        ErrorKind::UnexpectedToken,
+                        format!("expected '(' at top level")
+                    ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))));
+                }
             }
-            
-            // Skip comments
-            if self.s[self.i] == b';' {
-                self.skip_comment();
-                continue;
+        }
+        
+        Ok(tops)
+    }
+    
+    fn parse_top(&mut self) -> DslResult<Top> {
+        let Token::LPar(start_span) = self.lexer.next()? else {
+            unreachable!()
+        };
+        
+        let form_name = match self.lexer.next()? {
+            Token::Sym(s, _) => s,
+            token => {
+                let span = token.span().unwrap_or(start_span);
+                return Err(DslError::new(
+                    ErrorKind::InvalidSyntax,
+                    "expected form name after '('".to_string()
+                ).with_span(span));
             }
+        };
+        
+        let result = match form_name.as_str() {
+            "defbehavior" => self.parse_behavior(),
+            "defscene3d" => self.parse_scene3d(),
+            _ => {
+                Err(DslError::new(
+                    ErrorKind::UnknownForm,
+                    format!("unknown top-level form: {}", form_name)
+                ).with_span(start_span))
+            }
+        };
+        
+        // Consume closing paren
+        match self.lexer.next()? {
+            Token::RPar(_) => {}
+            token => {
+                let span = token.span().unwrap_or(start_span);
+                return Err(DslError::new(
+                    ErrorKind::UnexpectedToken,
+                    "expected ')' to close form".to_string()
+                ).with_span(span));
+            }
+        }
+        
+        result
+    }
+    
+    fn parse_behavior(&mut self) -> DslResult<Top> {
+        // Parse behavior name
+        let name = match self.lexer.next()? {
+            Token::Sym(s, _) => s,
+            token => {
+                let span = token.span();
+                return Err(DslError::new(
+                    ErrorKind::InvalidSyntax,
+                    "expected behavior name".to_string()
+                ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))));
+            }
+        };
+        
+        let mut state = Vec::new();
+        let mut update = None;
+        let mut on_select = None;
+        
+        // Parse behavior body
+        while let Token::LPar(_) = self.lexer.peek()? {
+            let Token::LPar(clause_start) = self.lexer.next()? else {
+                unreachable!()
+            };
             
-            let c = self.s[self.i];
-            return Some(match c {
-                b'(' => {
-                    self.i += 1;
-                    Tok::LPar
+            let clause_type = match self.lexer.next()? {
+                Token::Sym(s, _) => s,
+                token => {
+                    let span = token.span().unwrap_or(clause_start);
+                    return Err(DslError::new(
+                        ErrorKind::InvalidSyntax,
+                        "expected clause type".to_string()
+                    ).with_span(span));
                 }
-                b')' => {
-                    self.i += 1;
-                    Tok::RPar
+            };
+            
+            match clause_type.as_str() {
+                "state" => {
+                    state = self.parse_state_vars()?;
                 }
-                b'"' => {
-                    // Parse string literal
-                    self.i += 1; // Skip opening quote
-                    let start = self.i;
-                    while self.i < self.s.len() && self.s[self.i] != b'"' {
-                        if self.s[self.i] == b'\\' && self.i + 1 < self.s.len() {
-                            self.i += 2; // Skip escape sequence
-                        } else {
-                            self.i += 1;
-                        }
-                    }
-                    let s = std::str::from_utf8(&self.s[start..self.i]).unwrap().to_string();
-                    if self.i < self.s.len() {
-                        self.i += 1; // Skip closing quote
-                    }
-                    Tok::Str(s)
+                "update" => {
+                    update = Some(self.parse_fn_def()?);
                 }
-                b'0'..=b'9' => {
-                    let start = self.i;
-                    let mut has_dot = false;
-                    
-                    while self.i < self.s.len() && (self.s[self.i].is_ascii_digit() || self.s[self.i] == b'.') {
-                        if self.s[self.i] == b'.' {
-                            if has_dot { break; }
-                            has_dot = true;
-                        }
-                        self.i += 1;
-                    }
-                    
-                    let s = std::str::from_utf8(&self.s[start..self.i]).unwrap();
-                    if has_dot {
-                        Tok::Num(s.parse::<f32>().unwrap_or(0.0))
-                    } else {
-                        Tok::Int(s.parse::<i32>().unwrap_or(0))
-                    }
-                }
-                b'-' | b'+' => {
-                    let start = self.i;
-                    let sign_char = self.s[self.i];
-                    self.i += 1;
-                    
-                    // Check if this is a number (sign followed by digit)
-                    if self.i < self.s.len() && self.s[self.i].is_ascii_digit() {
-                        let mut has_dot = false;
-                        
-                        while self.i < self.s.len() && (self.s[self.i].is_ascii_digit() || self.s[self.i] == b'.') {
-                            if self.s[self.i] == b'.' {
-                                if has_dot { break; }
-                                has_dot = true;
-                            }
-                            self.i += 1;
-                        }
-                        
-                        let s = std::str::from_utf8(&self.s[start..self.i]).unwrap();
-                        if has_dot {
-                            Tok::Num(s.parse::<f32>().unwrap_or(0.0))
-                        } else {
-                            Tok::Int(s.parse::<i32>().unwrap_or(0))
-                        }
-                    } else {
-                        // It's just a symbol (operator)
-                        Tok::Sym(if sign_char == b'+' { "+".to_string() } else { "-".to_string() })
-                    }
+                "on-select" => {
+                    on_select = Some(self.parse_fn_def()?);
                 }
                 _ => {
-                    let start = self.i;
-                    while self.i < self.s.len() 
-                        && !self.s[self.i].is_ascii_whitespace() 
-                        && self.s[self.i] != b'(' 
-                        && self.s[self.i] != b')' 
-                        && self.s[self.i] != b';' {
-                        self.i += 1;
-                    }
-                    
-                    let s = std::str::from_utf8(&self.s[start..self.i]).unwrap().to_string();
-                    match s.as_str() {
-                        "#t" | "true" => Tok::True,
-                        "#f" | "false" => Tok::False,
-                        _ => Tok::Sym(s),
-                    }
+                    return Err(DslError::new(
+                        ErrorKind::UnknownForm,
+                        format!("unknown behavior clause: {}", clause_type)
+                    ).with_span(clause_start));
                 }
-            });
-        }
-    }
-}
-
-pub fn parse(src: &str) -> anyhow::Result<Vec<Top>> {
-    let mut lexer = Lexer::new(src);
-    let mut tops = vec![];
-    
-    while let Some(tok) = lexer.peek() {
-        match tok {
-            Tok::LPar => {
-                let expr = parse_expr(&mut lexer)?;
-                tops.push(desugar_top(expr)?);
             }
-            _ => {
-                lexer.next(); // skip
-            }
-        }
-    }
-    
-    Ok(tops)
-}
-
-fn parse_expr(lexer: &mut Lexer) -> anyhow::Result<Expr> {
-    match lexer.next() {
-        Some(Tok::LPar) => {
-            let mut v = vec![];
-            while let Some(t) = lexer.peek() {
-                if matches!(t, Tok::RPar) {
-                    lexer.next();
-                    break;
+            
+            // Consume closing paren for clause
+            match self.lexer.next()? {
+                Token::RPar(_) => {}
+                token => {
+                    let span = token.span().unwrap_or(clause_start);
+                    return Err(DslError::new(
+                        ErrorKind::UnexpectedToken,
+                        "expected ')' to close clause".to_string()
+                    ).with_span(span));
                 }
-                v.push(parse_expr(lexer)?);
             }
-            Ok(Expr::List(v))
         }
-        Some(Tok::RPar) => anyhow::bail!("unexpected )"),
-        Some(Tok::Num(n)) => Ok(Expr::F32(n)),
-        Some(Tok::Int(i)) => Ok(Expr::I32(i)),
-        Some(Tok::True) => Ok(Expr::Bool(true)),
-        Some(Tok::False) => Ok(Expr::Bool(false)),
-        Some(Tok::Sym(s)) => Ok(Expr::Sym(s)),
-        Some(Tok::Str(s)) => Ok(Expr::Str(s)),
-        None => anyhow::bail!("unexpected EOF"),
+        
+        let update = update.ok_or_else(|| {
+            DslError::new(
+                ErrorKind::InvalidSyntax,
+                "behavior requires an update clause".to_string()
+            )
+        })?;
+        
+        Ok(Top::Behavior(Behavior {
+            name,
+            state,
+            update,
+            on_select,
+        }))
     }
-}
-
-fn desugar_top(e: Expr) -> anyhow::Result<Top> {
-    let list = match e {
-        Expr::List(v) => v,
-        _ => anyhow::bail!("top-level must be a list"),
-    };
     
-    let Expr::Sym(head) = &list[0] else {
-        anyhow::bail!("expected symbol")
-    };
-    
-    match head.as_str() {
-        "defbehavior" | "behavior" => {
-            let name = match &list[1] {
-                Expr::Sym(s) => s.clone(),
-                _ => anyhow::bail!("behavior name must be symbol"),
+    fn parse_scene3d(&mut self) -> DslResult<Top> {
+        // Parse scene name
+        let name = match self.lexer.next()? {
+            Token::Sym(s, _) => s,
+            token => {
+                let span = token.span();
+                return Err(DslError::new(
+                    ErrorKind::InvalidSyntax,
+                    "expected scene name".to_string()
+                ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))));
+            }
+        };
+        
+        let mut objects = Vec::new();
+        let mut ui_elements = Vec::new();
+        let mut camera = None;
+        let mut lighting = None;
+        let mut input = None;
+        
+        // First expand macros, then parse the scene forms
+        let mut forms = Vec::new();
+        while let Token::LPar(_) = self.lexer.peek()? {
+            forms.push(self.parse_expr()?);
+        }
+        
+        // Expand scene macros
+        let expanded_forms = crate::scene_macros::expand_scene_forms(forms)
+            .map_err(|e| DslError::new(ErrorKind::MacroExpansionFailed, e.to_string()))?;
+        
+        // Now parse the expanded forms
+        for form in expanded_forms {
+            let Expr::List(ref parts) = form else {
+                continue;
+            };
+            if parts.is_empty() {
+                continue;
+            }
+            let Expr::Sym(ref tag) = parts[0] else {
+                continue;
             };
             
-            let mut state = vec![];
-            let mut update = None;
-            let mut on_select = None;
-            
-            for form in &list[2..] {
-                let Expr::List(parts) = form else {
-                    anyhow::bail!("behavior form must be list")
-                };
-                let Expr::Sym(tag) = &parts[0] else {
-                    anyhow::bail!("behavior form must start with symbol")
-                };
-                
-                match tag.as_str() {
-                    "state" => {
-                        for slot in &parts[1..] {
-                            let Expr::List(pair) = slot else {
-                                anyhow::bail!("state slot must be list")
-                            };
-                            let Expr::Sym(id) = &pair[0] else {
-                                anyhow::bail!("state id must be symbol")
-                            };
-                            let val = match &pair[1] {
-                                Expr::F32(x) => *x,
-                                Expr::I32(x) => *x as f32,
-                                _ => anyhow::bail!("state value must be number"),
-                            };
-                            state.push((id.clone(), val));
-                        }
-                    }
-                    "update" => {
-                        let Expr::List(ps) = &parts[1] else {
-                            anyhow::bail!("update params must be list")
-                        };
-                        let mut params = vec![];
-                        for p in ps {
-                            if let Expr::Sym(s) = p {
-                                params.push(s.clone());
-                            }
-                        }
-                        
-                        // If there are multiple statements, wrap them in a begin block
-                        let body = if parts.len() > 3 {
-                            // Multiple statements - wrap in begin
-                            let mut statements = vec![Expr::Sym("begin".to_string())];
-                            for stmt in &parts[2..] {
-                                statements.push(stmt.clone());
-                            }
-                            Expr::List(statements)
-                        } else {
-                            // Single statement
-                            parts[2].clone()
-                        };
-                        
-                        update = Some(FnDef {
-                            params,
-                            body,
-                        });
-                    }
-                    "on_select" => {
-                        let Expr::List(ps) = &parts[1] else {
-                            anyhow::bail!("on_select params must be list")
-                        };
-                        let mut params = vec![];
-                        for p in ps {
-                            if let Expr::Sym(s) = p {
-                                params.push(s.clone());
-                            }
-                        }
-                        
-                        // If there are multiple statements, wrap them in a begin block
-                        let body = if parts.len() > 3 {
-                            // Multiple statements - wrap in begin
-                            let mut statements = vec![Expr::Sym("begin".to_string())];
-                            for stmt in &parts[2..] {
-                                statements.push(stmt.clone());
-                            }
-                            Expr::List(statements)
-                        } else {
-                            // Single statement
-                            parts[2].clone()
-                        };
-                        
-                        on_select = Some(FnDef {
-                            params,
-                            body,
-                        });
-                    }
-                    _ => anyhow::bail!("unknown behavior form: {}", tag),
+            match tag.as_str() {
+                "object" => {
+                    objects.push(parse_object3d_from_expr(&parts[1..])?);
+                }
+                "sphere" | "cube" | "cylinder" | "cone" | "torus" | "plane" | "mesh" => {
+                    // Direct object types (from cond expansion)
+                    let mut object_parts = vec![
+                        Expr::Sym(format!("{}_{}", tag, objects.len())),
+                        Expr::Sym(tag.to_string())
+                    ];
+                    object_parts.extend_from_slice(&parts[1..]);
+                    objects.push(parse_object3d_from_expr(&object_parts)?);
+                }
+                "ui" | "ui-element" => {
+                    ui_elements.push(parse_ui_element_from_expr(&parts[1..])?);
+                }
+                "camera" => {
+                    camera = Some(parse_camera_from_expr(&parts[1..])?);
+                }
+                "lighting" => {
+                    lighting = Some(parse_lighting_from_expr(&parts[1..])?);
+                }
+                "input" => {
+                    input = Some(parse_input_from_expr(&parts[1..])?);
+                }
+                _ => {
+                    // Unknown form, but don't error - just skip it
                 }
             }
-            
-            let update = update.ok_or_else(|| anyhow::anyhow!("behavior must have update"))?;
-            
-            Ok(Top::Behavior(Behavior {
-                name,
-                state,
-                update,
-                on_select,
-            }))
         }
-        "defscene3d" => {
-            let name = match &list[1] {
-                Expr::Sym(s) => s.clone(),
-                _ => anyhow::bail!("scene name must be symbol"),
+        
+        Ok(Top::Scene3D(Scene3D {
+            name,
+            objects,
+            ui_elements,
+            camera,
+            lighting,
+            input,
+        }))
+    }
+    
+    fn parse_state_vars(&mut self) -> DslResult<Vec<(String, f32)>> {
+        let mut vars = Vec::new();
+        
+        while let Token::LPar(_) = self.lexer.peek()? {
+            self.lexer.next()?; // consume (
+            
+            let name = match self.lexer.next()? {
+                Token::Sym(s, _) => s,
+                token => {
+                    let span = token.span();
+                    return Err(DslError::new(
+                        ErrorKind::InvalidSyntax,
+                        "expected variable name".to_string()
+                    ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))));
+                }
             };
             
-            let mut objects = vec![];
-            let mut ui_elements = vec![];
-            let mut camera = None;
-            let mut lighting = None;
-            let mut input = None;
+            let value = match self.lexer.next()? {
+                Token::Num(n, _) => n,
+                Token::Int(n, _) => n as f32,
+                token => {
+                    let span = token.span();
+                    return Err(DslError::new(
+                        ErrorKind::TypeMismatch,
+                        "expected number for state variable".to_string()
+                    ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))));
+                }
+            };
             
-            // First, expand any macros in the scene forms
-            let forms = list[2..].to_vec();
-            let expanded_forms = crate::scene_macros::expand_scene_forms(forms)?;
+            match self.lexer.next()? {
+                Token::RPar(_) => {}
+                token => {
+                    let span = token.span();
+                    return Err(DslError::new(
+                        ErrorKind::UnexpectedToken,
+                        "expected ')' to close state variable".to_string()
+                    ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))));
+                }
+            }
             
-            for form in &expanded_forms {
-                let Expr::List(parts) = form else {
-                    anyhow::bail!("scene form must be list")
-                };
-                let Expr::Sym(tag) = &parts[0] else {
-                    anyhow::bail!("scene form must start with symbol")
-                };
+            vars.push((name, value));
+        }
+        
+        Ok(vars)
+    }
+    
+    fn parse_fn_def(&mut self) -> DslResult<FnDef> {
+        // Parse parameters
+        let params = self.parse_params()?;
+        
+        // Parse body expressions - multiple expressions are wrapped in an implicit progn/do
+        let mut body_exprs = Vec::new();
+        
+        // Keep parsing expressions until we hit the closing paren
+        while !matches!(self.lexer.peek()?, Token::RPar(_)) {
+            body_exprs.push(self.parse_expr()?);
+        }
+        
+        // If there's only one expression, use it directly
+        // Otherwise, wrap multiple expressions in a "do" form
+        let body = if body_exprs.len() == 1 {
+            body_exprs.into_iter().next().unwrap()
+        } else if body_exprs.is_empty() {
+            // Empty body defaults to nil/unit
+            Expr::List(vec![Expr::Sym("nil".to_string())])
+        } else {
+            // Multiple expressions wrapped in implicit "do"
+            let mut do_form = vec![Expr::Sym("do".to_string())];
+            do_form.extend(body_exprs);
+            Expr::List(do_form)
+        };
+        
+        Ok(FnDef { params, body })
+    }
+    
+    fn parse_params(&mut self) -> DslResult<Vec<String>> {
+        match self.lexer.peek()? {
+            Token::LPar(_) => {
+                self.lexer.next()?; // consume (
+                let mut params = Vec::new();
                 
-                match tag.as_str() {
-                    "object" => {
-                        objects.push(parse_object3d(&parts[1..])?);
-                    }
-                    "ui" | "ui-element" => {
-                        ui_elements.push(parse_ui_element(&parts[1..])?);
-                    }
-                    "camera" => {
-                        camera = Some(parse_camera(&parts[1..])?);
-                    }
-                    "lighting" => {
-                        lighting = Some(parse_lighting(&parts[1..])?);
-                    }
-                    "input" => {
-                        input = Some(parse_input(&parts[1..])?);
-                    }
-                    _ => anyhow::bail!("unknown scene form: {}", tag),
+                while let Token::Sym(name, _) = self.lexer.peek()? {
+                    self.lexer.next()?;
+                    params.push(name);
                 }
-            }
-            
-            Ok(Top::Scene3D(Scene3D {
-                name,
-                objects,
-                ui_elements,
-                camera,
-                lighting,
-                input,
-            }))
-        }
-        _ => anyhow::bail!("unknown top-level form: {}", head),
-    }
-}
-
-fn parse_object3d(parts: &[Expr]) -> anyhow::Result<Object3D> {
-    let name = match &parts[0] {
-        Expr::Sym(s) => s.clone(),
-        Expr::Str(s) => s.clone(),
-        _ => anyhow::bail!("object name must be symbol or string"),
-    };
-    
-    // mesh_type can be either a primitive name (cube, sphere) or a model path
-    let mesh_type = match &parts[1] {
-        Expr::Sym(s) => s.clone(), // Both primitives and paths are symbols in our parser
-        _ => anyhow::bail!("mesh type must be symbol (primitive name or model path)"),
-    };
-    
-    let mut transform = TransformDef {
-        position: [0.0, 0.0, 0.0],
-        rotation: [0.0, 0.0, 0.0],
-        scale: [1.0, 1.0, 1.0],
-    };
-    let mut material = None;
-    let mut behavior = None;
-    let mut interactive = false;
-    let mut meta = None;
-    
-    for form in &parts[2..] {
-        if let Expr::List(prop) = form {
-            if let Expr::Sym(tag) = &prop[0] {
-                match tag.as_str() {
-                    "position" => {
-                        transform.position = parse_vec3(&prop[1..])?;
-                    }
-                    "rotation" => {
-                        transform.rotation = parse_vec3(&prop[1..])?;
-                    }
-                    "scale" => {
-                        transform.scale = parse_vec3(&prop[1..])?;
-                    }
-                    "material" => {
-                        material = Some(parse_material(&prop[1..])?);
-                    }
-                    "behavior" => {
-                        if let Expr::Sym(b) = &prop[1] {
-                            behavior = Some(b.clone());
-                            // Special case: "interactive" behavior enables gizmos
-                            if b == "interactive" {
-                                interactive = true;
-                            }
-                        }
-                    }
-                    "interactive" => {
-                        // Allow explicit (interactive true/false) syntax
-                        if prop.len() > 1 {
-                            interactive = match &prop[1] {
-                                Expr::Bool(b) => *b,
-                                Expr::Sym(s) if s == "true" => true,
-                                Expr::Sym(s) if s == "false" => false,
-                                _ => true,
-                            };
-                        } else {
-                            interactive = true;
-                        }
-                    }
-                    "meta" => {
-                        meta = Some(parse_meta_directive(&prop[1..])?);
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    
-    Ok(Object3D {
-        name,
-        mesh_type,
-        transform,
-        material,
-        behavior,
-        interactive,
-        meta,
-    })
-}
-
-fn parse_camera(parts: &[Expr]) -> anyhow::Result<CameraDef> {
-    let mut position = [0.0, 5.0, 10.0];
-    let mut target = [0.0, 0.0, 0.0];
-    let mut up = [0.0, 1.0, 0.0];
-    let mut fov = 45.0; // Default FOV in degrees
-    let mut near = 0.1;
-    let mut far = 100.0;
-    let mut meta = None;
-    
-    // Parse camera properties
-    for part in parts {
-        if let Expr::List(ref list) = part {
-            if list.is_empty() { continue; }
-            
-            if let Some(prop_name) = list[0].as_symbol() {
-                match prop_name {
-                    "position" => {
-                        if list.len() == 4 {
-                            position = parse_vec3(&list[1..])?;
-                        }
-                    }
-                    "target" => {
-                        if list.len() == 4 {
-                            target = parse_vec3(&list[1..])?;
-                        }
-                    }
-                    "up" => {
-                        if list.len() == 4 {
-                            up = parse_vec3(&list[1..])?;
-                        }
-                    }
-                    "fov" => {
-                        if list.len() == 2 {
-                            fov = parse_float(&list[1])?;
-                        }
-                    }
-                    "near" => {
-                        if list.len() == 2 {
-                            near = parse_float(&list[1])?;
-                        }
-                    }
-                    "far" => {
-                        if list.len() == 2 {
-                            far = parse_float(&list[1])?;
-                        }
-                    }
-                    "meta" => {
-                        meta = Some(parse_meta_directive(&list[1..])?);
-                    }
-                    _ => {} // Ignore unknown properties
-                }
-            }
-        }
-    }
-    
-    Ok(CameraDef {
-        position,
-        target,
-        up,
-        fov: fov * std::f32::consts::PI / 180.0, // Convert degrees to radians
-        near,
-        far,
-        meta,
-    })
-}
-
-fn parse_ui_element(parts: &[Expr]) -> anyhow::Result<UIElement> {
-    if parts.len() < 2 {
-        anyhow::bail!("ui element needs at least name and type");
-    }
-    
-    let name = match &parts[0] {
-        Expr::Sym(s) => s.clone(),
-        _ => anyhow::bail!("ui element name must be symbol"),
-    };
-    
-    let ui_type = match &parts[1] {
-        Expr::Sym(s) => s.clone(),
-        _ => anyhow::bail!("ui element type must be symbol"),
-    };
-    
-    let mut position = [0.0, 0.0, -5.0];
-    let mut size = [2.0, 2.0];
-    let mut text = None;
-    let mut color = [1.0, 1.0, 1.0, 1.0];
-    let mut behavior = None;
-    
-    // Parse properties
-    for part in &parts[2..] {
-        if let Expr::List(ref list) = part {
-            if list.is_empty() { continue; }
-            
-            if let Some(prop_name) = list[0].as_symbol() {
-                match prop_name {
-                    "position" => {
-                        if list.len() == 4 {
-                            position = parse_vec3(&list[1..])?;
-                        }
-                    }
-                    "size" => {
-                        if list.len() == 3 {
-                            let x = parse_float(&list[1])?;
-                            let y = parse_float(&list[2])?;
-                            size = [x, y];
-                        }
-                    }
-                    "text" => {
-                        if list.len() >= 2 {
-                            // Join all text parts
-                            let text_parts: Vec<String> = list[1..].iter()
-                                .filter_map(|e| match e {
-                                    Expr::Sym(s) => Some(s.clone()),
-                                    _ => None,
-                                })
-                                .collect();
-                            text = Some(text_parts.join(" "));
-                        }
-                    }
-                    "color" => {
-                        // Use the new color parser that supports multiple formats
-                        color = crate::color::parse_color(&list[1..])?;
-                    }
-                    "behavior" => {
-                        if list.len() == 2 {
-                            behavior = Some(match &list[1] {
-                                Expr::Sym(s) => s.clone(),
-                                _ => anyhow::bail!("behavior must be symbol"),
-                            });
-                        }
-                    }
-                    _ => {} // Ignore unknown properties
-                }
-            }
-        }
-    }
-    
-    Ok(UIElement {
-        name,
-        ui_type,
-        position,
-        size,
-        text,
-        color,
-        behavior,
-    })
-}
-
-fn parse_lighting(parts: &[Expr]) -> anyhow::Result<LightingDef> {
-    let mut ambient = [0.3, 0.3, 0.3];
-    let mut directional = None;
-    
-    // Parse lighting properties
-    for part in parts {
-        if let Expr::List(ref list) = part {
-            if list.is_empty() { continue; }
-            
-            if let Some(prop_name) = list[0].as_symbol() {
-                match prop_name {
-                    "ambient" => {
-                        // Parse color and take only RGB components for lighting
-                        let rgba = crate::color::parse_color(&list[1..])?;
-                        ambient = [rgba[0], rgba[1], rgba[2]];
-                    }
-                    "directional" => {
-                        // Parse directional light properties
-                        let mut direction = [1.0, 1.0, 1.0];
-                        let mut color = [1.0, 1.0, 1.0];
-                        let mut intensity = 1.0;
-                        
-                        for dir_part in &list[1..] {
-                            if let Expr::List(ref dir_list) = dir_part {
-                                if dir_list.is_empty() { continue; }
-                                
-                                if let Some(dir_prop) = dir_list[0].as_symbol() {
-                                    match dir_prop {
-                                        "direction" => {
-                                            if dir_list.len() == 4 {
-                                                direction = parse_vec3(&dir_list[1..])?;
-                                            }
-                                        }
-                                        "color" => {
-                                            // Parse color and take only RGB components for lighting
-                                            let rgba = crate::color::parse_color(&dir_list[1..])?;
-                                            color = [rgba[0], rgba[1], rgba[2]];
-                                        }
-                                        "intensity" => {
-                                            if dir_list.len() == 2 {
-                                                intensity = parse_float(&dir_list[1])?;
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-                        }
-                        
-                        directional = Some(DirectionalLight {
-                            direction,
-                            color,
-                            intensity,
-                        });
-                    }
-                    _ => {} // Ignore unknown properties
-                }
-            }
-        }
-    }
-    
-    Ok(LightingDef {
-        ambient,
-        directional,
-    })
-}
-
-fn parse_float(expr: &Expr) -> anyhow::Result<f32> {
-    match expr {
-        Expr::F32(f) => Ok(*f),
-        Expr::I32(i) => Ok(*i as f32),
-        _ => anyhow::bail!("Expected a number, got {:?}", expr),
-    }
-}
-
-fn parse_vec3(parts: &[Expr]) -> anyhow::Result<[f32; 3]> {
-    if parts.len() != 3 {
-        anyhow::bail!("vec3 needs exactly 3 components");
-    }
-    
-    let mut result = [0.0; 3];
-    for (i, part) in parts.iter().enumerate() {
-        result[i] = match part {
-            Expr::F32(f) => *f,
-            Expr::I32(i) => *i as f32,
-            _ => anyhow::bail!("vec3 components must be numbers"),
-        };
-    }
-    
-    Ok(result)
-}
-
-fn parse_vec4(parts: &[Expr]) -> anyhow::Result<[f32; 4]> {
-    if parts.len() != 4 {
-        anyhow::bail!("vec4 needs exactly 4 components");
-    }
-    
-    let mut result = [0.0; 4];
-    for (i, part) in parts.iter().enumerate() {
-        result[i] = match part {
-            Expr::F32(f) => *f,
-            Expr::I32(i) => *i as f32,
-            _ => anyhow::bail!("vec4 components must be numbers"),
-        };
-    }
-    
-    Ok(result)
-}
-
-fn parse_material(parts: &[Expr]) -> anyhow::Result<MaterialDef> {
-    if parts.is_empty() {
-        anyhow::bail!("material needs at least a type");
-    }
-    
-    // First element should be the material type
-    let material_type = match &parts[0] {
-        Expr::Sym(s) => s.as_str(),
-        _ => anyhow::bail!("material type must be a symbol"),
-    };
-    
-    match material_type {
-        "mesh-basic" => {
-            let mut color = [1.0, 1.0, 1.0, 1.0];
-            let mut opacity = 1.0;
-            let mut transparent = false;
-            let mut side = "front".to_string();
-            let mut wireframe = false;
-            
-            // Parse properties
-            for part in &parts[1..] {
-                if let Expr::List(ref list) = part {
-                    if list.is_empty() { continue; }
-                    
-                    if let Some(prop_name) = list[0].as_symbol() {
-                        match prop_name {
-                            "color" => {
-                                // Use the new color parser that supports multiple formats
-                                color = crate::color::parse_color(&list[1..])?;
-                                // If color has alpha channel less than 1.0, update opacity
-                                if color[3] < 1.0 {
-                                    opacity = color[3];
-                                    transparent = true;
-                                }
-                            }
-                            "opacity" => {
-                                if list.len() == 2 {
-                                    opacity = parse_float(&list[1])?;
-                                    transparent = opacity < 1.0;
-                                }
-                            }
-                            "transparent" => {
-                                if list.len() == 2 {
-                                    transparent = match &list[1] {
-                                        Expr::Bool(b) => *b,
-                                        Expr::Sym(s) if s == "true" => true,
-                                        Expr::Sym(s) if s == "false" => false,
-                                        _ => false,
-                                    };
-                                }
-                            }
-                            "side" => {
-                                if list.len() == 2 {
-                                    side = match &list[1] {
-                                        Expr::Sym(s) => s.clone(),
-                                        _ => "front".to_string(),
-                                    };
-                                }
-                            }
-                            "wireframe" => {
-                                if list.len() == 2 {
-                                    wireframe = match &list[1] {
-                                        Expr::Bool(b) => *b,
-                                        Expr::Sym(s) if s == "true" => true,
-                                        Expr::Sym(s) if s == "false" => false,
-                                        _ => false,
-                                    };
-                                }
-                            }
-                            _ => {}
-                        }
+                
+                match self.lexer.next()? {
+                    Token::RPar(_) => Ok(params),
+                    token => {
+                        let span = token.span();
+                        Err(DslError::new(
+                            ErrorKind::UnexpectedToken,
+                            "expected ')' to close parameter list".to_string()
+                        ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))))
                     }
                 }
             }
-            
-            Ok(MaterialDef::MeshBasic {
-                color,
-                opacity,
-                transparent,
-                side,
-                wireframe,
-            })
+            _ => Ok(Vec::new())
         }
-        "standard" | _ => {
-            // Default to standard material
-            let mut base_color = [1.0, 1.0, 1.0, 1.0];
-            let mut metallic = 0.0;
-            let mut roughness = 0.5;
-            let mut emissive = [0.0, 0.0, 0.0];
-            
-            for part in &parts[1..] {
-                if let Expr::List(ref list) = part {
-                    if list.is_empty() { continue; }
-                    
-                    if let Some(prop_name) = list[0].as_symbol() {
-                        match prop_name {
-                            "base-color" => {
-                                if list.len() == 5 {
-                                    base_color = parse_vec4(&list[1..])?;
-                                }
-                            }
-                            "metallic" => {
-                                if list.len() == 2 {
-                                    metallic = parse_float(&list[1])?;
-                                }
-                            }
-                            "roughness" => {
-                                if list.len() == 2 {
-                                    roughness = parse_float(&list[1])?;
-                                }
-                            }
-                            "emissive" => {
-                                if list.len() == 4 {
-                                    emissive = parse_vec3(&list[1..])?;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+    }
+    
+    fn parse_expr(&mut self) -> DslResult<Expr> {
+        match self.lexer.next()? {
+            Token::Int(n, _) => Ok(Expr::I32(n)),
+            Token::Num(n, _) => Ok(Expr::F32(n)),
+            Token::True(_) => Ok(Expr::Bool(true)),
+            Token::False(_) => Ok(Expr::Bool(false)),
+            Token::Str(s, _) => Ok(Expr::Str(s)),
+            Token::Sym(s, _) => Ok(Expr::Sym(s)),
+            Token::LPar(_) => {
+                let mut exprs = Vec::new();
+                
+                while !matches!(self.lexer.peek()?, Token::RPar(_)) {
+                    exprs.push(self.parse_expr()?);
                 }
+                
+                self.lexer.next()?; // consume )
+                Ok(Expr::List(exprs))
             }
-            
-            Ok(MaterialDef::Standard {
-                base_color,
-                metallic,
-                roughness,
-                emissive,
-            })
+            token => {
+                let span = token.span();
+                Err(DslError::new(
+                    ErrorKind::UnexpectedToken,
+                    "unexpected token in expression".to_string()
+                ).with_span(span.unwrap_or_else(|| Span::new(Position::new(1, 1, 0), Position::new(1, 1, 0)))))
+            }
         }
     }
 }
 
-fn parse_input(parts: &[Expr]) -> anyhow::Result<InputDef> {
-    let mut camera_controls = None;
-    let mut key_bindings = vec![];
-    
-    for form in parts {
-        let Expr::List(prop) = form else {
-            continue;
-        };
-        
-        if prop.is_empty() {
-            continue;
-        }
-        
-        let Expr::Sym(tag) = &prop[0] else {
-            continue;
-        };
-        
-        match tag.as_str() {
-            "camera-controls" => {
-                camera_controls = Some(parse_camera_controls(&prop[1..])?);
-            }
-            "key" => {
-                key_bindings.push(parse_key_binding(&prop[1..])?);
-            }
-            _ => {} // Ignore unknown properties
-        }
-    }
-    
-    Ok(InputDef {
-        camera_controls,
-        key_bindings,
-    })
-}
-
-fn parse_camera_controls(parts: &[Expr]) -> anyhow::Result<CameraControls> {
-    let mut move_speed = 5.0;
-    let mut rotate_speed = 1.0;
-    let mut movement_keys = MovementKeys {
-        forward: "W".to_string(),
-        backward: "S".to_string(),
-        left: "A".to_string(),
-        right: "D".to_string(),
-        up: "Space".to_string(),
-        down: "Shift".to_string(),
-    };
-    let mut rotation_keys = RotationKeys {
-        pitch_up: "Up".to_string(),
-        pitch_down: "Down".to_string(),
-        yaw_left: "Left".to_string(),
-        yaw_right: "Right".to_string(),
-    };
-    let mut orbit_controls = None;
-    
-    for form in parts {
-        let Expr::List(prop) = form else {
-            continue;
-        };
-        
-        if prop.len() < 2 {
-            continue;
-        }
-        
-        let Expr::Sym(tag) = &prop[0] else {
-            continue;
-        };
-        
-        match tag.as_str() {
-            "move-speed" => {
-                move_speed = parse_float(&prop[1])?;
-            }
-            "rotate-speed" => {
-                rotate_speed = parse_float(&prop[1])?;
-            }
-            "movement" => {
-                for movement_prop in &prop[1..] {
-                    if let Expr::List(mp) = movement_prop {
-                        if mp.len() >= 2 {
-                            if let (Expr::Sym(key), Expr::Sym(value)) = (&mp[0], &mp[1]) {
-                                match key.as_str() {
-                                    "forward" => movement_keys.forward = value.clone(),
-                                    "backward" => movement_keys.backward = value.clone(),
-                                    "left" => movement_keys.left = value.clone(),
-                                    "right" => movement_keys.right = value.clone(),
-                                    "up" => movement_keys.up = value.clone(),
-                                    "down" => movement_keys.down = value.clone(),
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            "rotation" => {
-                for rotation_prop in &prop[1..] {
-                    if let Expr::List(rp) = rotation_prop {
-                        if rp.len() >= 2 {
-                            if let (Expr::Sym(key), Expr::Sym(value)) = (&rp[0], &rp[1]) {
-                                match key.as_str() {
-                                    "pitch-up" => rotation_keys.pitch_up = value.clone(),
-                                    "pitch-down" => rotation_keys.pitch_down = value.clone(),
-                                    "yaw-left" => rotation_keys.yaw_left = value.clone(),
-                                    "yaw-right" => rotation_keys.yaw_right = value.clone(),
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            "orbit-controls" => {
-                orbit_controls = Some(parse_orbit_controls(&prop[1..])?);
-            }
-            _ => {}
-        }
-    }
-    
-    Ok(CameraControls {
-        move_speed,
-        rotate_speed,
-        movement_keys,
-        rotation_keys,
-        orbit_controls,
-    })
-}
-
-fn parse_orbit_controls(parts: &[Expr]) -> anyhow::Result<OrbitControls> {
-    let mut enabled = true;
-    let mut sensitivity = 1.0;
-    let mut damping = 0.05;
-    let mut min_distance = 1.0;
-    let mut max_distance = 100.0;
-    let mut min_polar_angle = 0.0;
-    let mut max_polar_angle = std::f32::consts::PI;
-    let mut enable_zoom = true;
-    let mut zoom_speed = 1.0;
-    
-    for form in parts {
-        let Expr::List(prop) = form else {
-            continue;
-        };
-        
-        if prop.len() < 2 {
-            continue;
-        }
-        
-        let Expr::Sym(tag) = &prop[0] else {
-            continue;
-        };
-        
-        match tag.as_str() {
-            "enabled" => {
-                enabled = match &prop[1] {
-                    Expr::Bool(b) => *b,
-                    Expr::Sym(s) if s == "true" => true,
-                    Expr::Sym(s) if s == "false" => false,
-                    _ => true,
-                };
-            }
-            "sensitivity" => {
-                sensitivity = parse_float(&prop[1])?;
-            }
-            "damping" => {
-                damping = parse_float(&prop[1])?;
-            }
-            "min-distance" => {
-                min_distance = parse_float(&prop[1])?;
-            }
-            "max-distance" => {
-                max_distance = parse_float(&prop[1])?;
-            }
-            "min-polar-angle" => {
-                min_polar_angle = parse_float(&prop[1])?;
-            }
-            "max-polar-angle" => {
-                max_polar_angle = parse_float(&prop[1])?;
-            }
-            "enable-zoom" => {
-                enable_zoom = match &prop[1] {
-                    Expr::Bool(b) => *b,
-                    Expr::Sym(s) if s == "true" => true,
-                    Expr::Sym(s) if s == "false" => false,
-                    _ => true,
-                };
-            }
-            "zoom-speed" => {
-                zoom_speed = parse_float(&prop[1])?;
-            }
-            _ => {}
-        }
-    }
-    
-    Ok(OrbitControls {
-        enabled,
-        sensitivity,
-        damping,
-        min_distance,
-        max_distance,
-        min_polar_angle,
-        max_polar_angle,
-        enable_zoom,
-        zoom_speed,
-    })
-}
-
-fn parse_key_binding(parts: &[Expr]) -> anyhow::Result<KeyBinding> {
-    if parts.len() < 2 {
-        anyhow::bail!("key binding needs key and action");
-    }
-    
-    let key = match &parts[0] {
-        Expr::Sym(s) => s.clone(),
-        _ => anyhow::bail!("key must be a symbol"),
-    };
-    
-    let action = match &parts[1] {
-        Expr::Sym(s) => s.clone(),
-        _ => anyhow::bail!("action must be a symbol"),
-    };
-    
-    let target = if parts.len() > 2 {
-        match &parts[2] {
-            Expr::Sym(s) => Some(s.clone()),
-            _ => None,
-        }
-    } else {
-        None
-    };
-    
-    Ok(KeyBinding {
-        key,
-        action,
-        target,
-    })
-}
-
-fn parse_meta_directive(parts: &[Expr]) -> anyhow::Result<crate::ast::MetaDirective> {
-    let mut preserve_mode = "reset-on-reload".to_string(); // Default mode
-    let mut properties = Vec::new();
-    
-    for expr in parts {
-        match expr {
-            Expr::Sym(s) => {
-                // Single symbols are preserve modes
-                match s.as_str() {
-                    "preserve-runtime" | "preserve" => {
-                        preserve_mode = "preserve-runtime".to_string();
-                    }
-                    "sync-to-code" | "sync" => {
-                        preserve_mode = "sync-to-code".to_string();
-                    }
-                    "reset-on-reload" | "reset" => {
-                        preserve_mode = "reset-on-reload".to_string();
-                    }
-                    "volatile" => {
-                        preserve_mode = "volatile".to_string();
-                    }
-                    _ => {
-                        // Unknown symbol, treat as property to preserve
-                        properties.push(s.clone());
-                    }
-                }
-            }
-            Expr::List(list) => {
-                // Lists specify properties to preserve
-                if let Some(Expr::Sym(tag)) = list.first() {
-                    if tag == "preserve" || tag == "properties" {
-                        for item in &list[1..] {
-                            if let Expr::Sym(prop) = item {
-                                properties.push(prop.clone());
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    
-    // If no properties specified, default to preserving all
-    if properties.is_empty() && preserve_mode != "reset-on-reload" {
-        properties = vec!["position".to_string(), "rotation".to_string(), "scale".to_string()];
-    }
-    
-    Ok(crate::ast::MetaDirective {
-        preserve_mode,
-        properties,
-    })
+/// Parse DSL source code with full position tracking
+pub fn parse(source: &str) -> DslResult<Vec<Top>> {
+    let mut parser = EnhancedParser::new(source.to_string());
+    parser.parse()
 }

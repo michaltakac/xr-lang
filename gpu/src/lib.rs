@@ -21,8 +21,14 @@ pub mod perf_monitor;
 pub mod perf_monitor_simple;
 pub mod perf_overlay;
 pub mod perf_overlay_live;
+pub mod perf_text;
 pub mod debug_config;
 pub mod materials;
+pub mod instanced_renderer;
+pub mod frustum;
+pub mod benchmark;
+pub mod gpu_driven_renderer;
+pub mod gpu_memory_pool;
 
 pub use device::*;
 pub use shader::*;

@@ -1,0 +1,19 @@
+(scene
+  ; Test multi-argument arithmetic operations
+  (let ((sum (+ 1 2 3 4 5))
+        (product (* 2 3 4))
+        (diff (- 10 3 2 1)))
+    (cube 
+      :id "test_cube"
+      :position [sum 0 0]
+      :size [1 1 1]
+      :color (/ 1 2 2)  ; Test division with multiple args
+    )
+    (sphere
+      :id "test_sphere"
+      :position [0 product 0]
+      :radius diff
+      :color (+ 0.1 0.2 0.3 0.4)  ; Should sum to 1.0
+    )
+  )
+)

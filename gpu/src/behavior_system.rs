@@ -18,6 +18,11 @@ impl BehaviorSystem {
         }
     }
     
+    /// Check if there are any active behaviors
+    pub fn is_empty(&self) -> bool {
+        self.active_behaviors.is_empty()
+    }
+    
     /// Hot-swap behaviors from new AST
     pub fn hot_swap_behaviors(&mut self, ast: &[dsl::ast::Top]) -> Result<()> {
         println!("🔥 Hot-swapping behaviors...");

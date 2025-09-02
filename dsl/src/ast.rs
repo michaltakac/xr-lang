@@ -1,6 +1,25 @@
 //! Abstract Syntax Tree for XR-DSL
 
 use serde::{Deserialize, Serialize};
+use crate::error::Span;
+
+/// Expression with optional span information for error reporting
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpannedExpr {
+    pub expr: Expr,
+    #[serde(skip)]
+    pub span: Option<Span>,
+}
+
+impl SpannedExpr {
+    pub fn new(expr: Expr, span: Option<Span>) -> Self {
+        Self { expr, span }
+    }
+    
+    pub fn no_span(expr: Expr) -> Self {
+        Self { expr, span: None }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Expr {

@@ -1,0 +1,42 @@
+; Test HSL color with arithmetic expressions
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d test-hsl-arithmetic
+  ; Test HSL colors with arithmetic expressions
+  (let ((base-hue 120)  ; Green base
+        (offset 60))     ; Color offset
+    
+    ; Cube with base color
+    (object cube1 cube
+      (position -3 0 0)
+      (scale 1 1 1)
+      (material mesh-basic
+        (color hsl base-hue 80 60)  ; Direct variable
+        (opacity 1.0)
+        (side front))
+      (behavior spin))
+    
+    ; Cube with calculated hue
+    (object cube2 cube
+      (position 0 0 0)
+      (scale 1 1 1)
+      (material mesh-basic
+        (color hsl (+ base-hue offset) 80 60)  ; Arithmetic expression
+        (opacity 1.0)
+        (side front))
+      (behavior spin))
+    
+    ; Cube with more complex calculation
+    (object cube3 cube
+      (position 3 0 0)
+      (scale 1 1 1)
+      (material mesh-basic
+        (color hsl (+ base-hue (* offset 2)) 80 60)  ; More complex arithmetic
+        (opacity 1.0)
+        (side front))
+      (behavior spin))
+  )
+)

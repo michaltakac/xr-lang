@@ -8,6 +8,10 @@ use crate::behavior_system::BehaviorSystem;
 use crate::code_sync::CodeSync;
 use crate::perf_overlay_live::LivePerfOverlay;
 use crate::materials::{MeshBasicMaterial, Side};
+use crate::instanced_renderer::InstancedRenderer;
+use crate::benchmark::Benchmark;
+use crate::gpu_driven_renderer::{GPUDrivenRenderer, GPUInstanceData, CullingUniforms};
+use crate::gpu_memory_pool::GPUMemoryPool;
 use wgpu::*;
 use wgpu::util::DeviceExt;
 use bytemuck::{Pod, Zeroable};
@@ -57,6 +61,25 @@ pub struct Uniforms {
     pub model: Mat4,
     pub time: f32,
     pub _pad: [f32; 3],
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct CameraUniforms {
+    pub view: Mat4,
+    pub proj: Mat4,
+    pub position: Vec3,
+    pub _padding: f32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct MaterialUniforms {
+    pub color: [f32; 4],      // 16 bytes
+    pub opacity: f32,          // 4 bytes
+    pub _padding1: [f32; 3],   // 12 bytes padding to align next vec3
+    pub _padding2: [f32; 3],   // 12 bytes for the vec3 in shader
+    pub _padding3: f32,        // 4 bytes to make total 48
 }
 
 pub struct Mesh {
@@ -196,8 +219,19 @@ pub struct Renderer3D {
     pub behavior_system: BehaviorSystem,
     pub code_sync: CodeSync,
     pub perf_overlay: LivePerfOverlay,
+    pub instanced_renderer: InstancedRenderer,
+    pub instanced_pipeline: Option<RenderPipeline>,
+    pub instanced_camera_buffer: Option<Buffer>,
+    pub instanced_camera_bind_group: Option<BindGroup>,
+    pub instanced_material_buffer: Option<Buffer>,
+    pub instanced_material_bind_group: Option<BindGroup>,
     pub device: *const Device,
     pub surface_format: TextureFormat,
+    pub benchmark: Option<Benchmark>,
+    pub static_scene: bool,  // Track if scene is static (no animations)
+    pub gpu_driven_renderer: Option<GPUDrivenRenderer>,
+    pub gpu_memory_pool: Option<GPUMemoryPool>,
+    pub use_gpu_driven: bool,  // Toggle between old and new renderer
 }
 
 pub struct OrbitState {
@@ -346,13 +380,154 @@ impl Renderer3D {
             behavior_system: BehaviorSystem::new(),
             code_sync: CodeSync::new(),
             perf_overlay: LivePerfOverlay::new(device, config.format),
+            instanced_renderer: InstancedRenderer::new(),
+            instanced_pipeline: None,
+            instanced_camera_buffer: None,
+            instanced_camera_bind_group: None,
+            instanced_material_buffer: None,
+            instanced_material_bind_group: None,
             device: device as *const Device,
             surface_format: config.format,
+            benchmark: None,
+            static_scene: false,
+            gpu_driven_renderer: None,  // Initialized on demand
+            gpu_memory_pool: None,  // Initialized on demand
+            use_gpu_driven: false,  // Disabled GPU-driven renderer to fix primitive rendering
         };
         
         // Initialize scene from default data
         renderer.rebuild_scene(device);
+        
+        // Create instanced rendering pipeline
+        renderer.create_instanced_pipeline(device);
+        
         renderer
+    }
+    
+    /// Create the instanced rendering pipeline
+    fn create_instanced_pipeline(&mut self, device: &Device) {
+        let shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Instanced Shader"),
+            source: ShaderSource::Wgsl(include_str!("shaders/mesh_basic_instanced.wgsl").into()),
+        });
+        
+        // Create camera uniform buffer
+        let camera_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("Instanced Camera Buffer"),
+            size: std::mem::size_of::<CameraUniforms>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        
+        let camera_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Camera Bind Group Layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        
+        let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Instanced Camera Bind Group"),
+            layout: &camera_bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+        
+        // Create material uniform buffer - ensure proper size
+        let material_buffer_size = std::mem::size_of::<MaterialUniforms>() as u64;
+        println!("Creating material buffer with size: {} bytes", material_buffer_size);
+        let material_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("Instanced Material Buffer"),
+            size: material_buffer_size,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        
+        let material_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Material Bind Group Layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        
+        let material_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Instanced Material Bind Group"),
+            layout: &material_bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: material_buffer.as_entire_binding(),
+            }],
+        });
+        
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Instanced Pipeline Layout"),
+            bind_group_layouts: &[&camera_bind_group_layout, &material_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+        
+        let instanced_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Instanced Render Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[
+                    Vertex3D::desc(),
+                    crate::instanced_renderer::instance_buffer_layout(),
+                ],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(ColorTargetState {
+                    format: self.surface_format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: None, // No culling for double-sided rendering
+                unclipped_depth: false,
+                polygon_mode: PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
+            multisample: MultisampleState::default(),
+            multiview: None,
+        });
+        
+        self.instanced_pipeline = Some(instanced_pipeline);
+        self.instanced_camera_buffer = Some(camera_buffer);
+        self.instanced_camera_bind_group = Some(camera_bind_group);
+        self.instanced_material_buffer = Some(material_buffer);
+        self.instanced_material_bind_group = Some(material_bind_group);
     }
     
     pub fn add_mesh(&mut self, mesh: Mesh) {
@@ -364,8 +539,14 @@ impl Renderer3D {
     }
     
     pub fn load_scene(&mut self, mut scene_data: SceneData, device: &Device) {
-        println!("🔄 Loading new scene with {} entities, {} UI elements", 
+        println!("\\x1b[36mLOAD\\x1b[0m Scene: {} entities, {} UI elements", 
             scene_data.entities.len(), scene_data.ui_elements.len());
+            
+        // Auto-start benchmark if BENCHMARK env var is set
+        if std::env::var("BENCHMARK").is_ok() && self.benchmark.is_none() {
+            let scene_name = format!("scene_{}_objects", scene_data.entities.len());
+            self.start_benchmark(scene_name);
+        }
         
         // Hot-swap behaviors from AST
         if !scene_data.ast.is_empty() {
@@ -596,9 +777,11 @@ impl Renderer3D {
                 _ => Mesh::cube(device), // Fallback for procedural
             };
             
-            mesh.transform.position = entity.transform.position;
-            mesh.transform.scale = entity.transform.scale;
-            mesh.transform.rotation = entity.transform.rotation;
+            mesh.transform = Transform::new(
+                entity.transform.position,
+                entity.transform.rotation,
+                entity.transform.scale
+            );
             
             // Apply material if specified
             if let Some(ref material_def) = entity.material {
@@ -656,10 +839,10 @@ impl Renderer3D {
         }
         
         // Log behavior information for debugging
-        println!("✅ Rebuilt scene with {} meshes", self.meshes.len());
+        println!("\x1b[32mOK\x1b[0m Rebuilt scene: {} meshes", self.meshes.len());
         for (name, behavior) in &self.scene_data.behaviors {
             if let Some(speed) = behavior.state.get("speed") {
-                println!("🎯 Behavior '{}': speed = {}", name, speed);
+                println!("\x1b[2m  => behavior {}: speed={}\x1b[0m", name, speed);
             }
         }
     }
@@ -790,12 +973,253 @@ impl Renderer3D {
         self.ui_system.update(dt, &self.camera, device);
     }
 
+    pub fn start_benchmark(&mut self, scene_name: String) {
+        println!("\x1b[36mBENCHMARK\x1b[0m Starting for scene: {}", scene_name);
+        self.benchmark = Some(Benchmark::new(scene_name));
+    }
+    
+    pub fn toggle_gpu_driven_rendering(&mut self, device: &Device) {
+        self.use_gpu_driven = !self.use_gpu_driven;
+        
+        // Initialize GPU-driven renderer on first use
+        if self.use_gpu_driven && self.gpu_driven_renderer.is_none() {
+            println!("\x1b[36mINIT\x1b[0m GPU-driven renderer...");
+            self.gpu_driven_renderer = Some(GPUDrivenRenderer::new(device, self.surface_format));
+            
+            // Initialize GPU memory pool with proper device reference management
+            self.gpu_memory_pool = Some(GPUMemoryPool::new(device));
+            
+            // Upload initial instance data if we have entities
+            // Note: Will upload on first render when queue is available
+        }
+    }
+    
+    fn upload_instances_to_gpu(&self, gpu_renderer: &mut GPUDrivenRenderer, queue: &Queue) {
+        let mut gpu_instances = Vec::new();
+        
+        for (i, mesh) in self.meshes.iter().enumerate() {
+            if i < self.scene_data.entities.len() {
+                let entity = &self.scene_data.entities[i];
+                
+                // Get color from material
+                let color = if let Some(ref mat) = entity.material {
+                    match mat {
+                        dsl::ast::MaterialDef::MeshBasic { color, .. } => *color,
+                        _ => [1.0, 1.0, 1.0, 1.0],
+                    }
+                } else {
+                    [1.0, 1.0, 1.0, 1.0]
+                };
+                
+                // Create GPU instance data
+                // Calculate bounding radius from transform scale
+                let scale_max = mesh.transform.scale.x.max(mesh.transform.scale.y).max(mesh.transform.scale.z);
+                let base_radius = 1.0; // Base radius for a unit sphere/cube
+                let bounding_radius = base_radius * scale_max * 1.5; // 1.5x for safety margin
+                
+                let instance = GPUInstanceData {
+                    model_matrix: mesh.transform.to_matrix().to_cols_array_2d(),
+                    color,
+                    animation_time: 0.0,
+                    animation_speed: 1.0,
+                    animation_amplitude: 0.5,
+                    bounding_radius,
+                    visible: 1,
+                    _padding: [0, 0, 0],
+                };
+                
+                gpu_instances.push(instance);
+            }
+        }
+        
+        if !gpu_instances.is_empty() {
+            gpu_renderer.upload_instances(&gpu_instances, queue);
+            println!("📤 Uploaded {} instances to GPU", gpu_instances.len());
+        }
+    }
+    
+    pub fn stop_benchmark(&mut self) {
+        if let Some(ref benchmark) = self.benchmark {
+            // Get final stats from instanced renderer
+            let stats = self.instanced_renderer.get_stats();
+            let total_objects = self.scene_data.entities.len();
+            
+            // Calculate metrics
+            let metrics = benchmark.calculate_metrics(
+                total_objects,
+                stats.total_instances,
+                stats.objects_culled,
+                stats.instance_groups,
+            );
+            
+            // Print and save results
+            Benchmark::print_metrics(&metrics);
+            if let Err(e) = Benchmark::write_to_file(&metrics) {
+                eprintln!("Failed to write benchmark results: {}", e);
+            }
+        }
+        self.benchmark = None;
+    }
+    
     pub fn render(&mut self, device: &Device, queue: &Queue, view: &TextureView, depth_view: &TextureView) {
-        // Reset frame stats for performance overlay
+        // Reset frame stats for performance overlay (for both renderers)
         self.perf_overlay.reset_frame_stats();
         
+        // Update benchmark if running (for both renderers)
+        if let Some(ref mut benchmark) = self.benchmark {
+            benchmark.frame_tick();
+            
+            // Check if benchmark is complete
+            if benchmark.is_complete() {
+                println!("\x1b[32mOK\x1b[0m Benchmark complete");
+                self.stop_benchmark();
+            } else {
+                // Print current stats every 60 frames
+                if self.time as u32 % 60 == 0 {
+                    println!("📈 Current: {:.1} FPS, {:.2}ms frame time", 
+                        benchmark.get_current_fps(),
+                        benchmark.get_current_frame_time_ms()
+                    );
+                }
+            }
+        }
+        
+        // Use GPU-driven renderer if enabled
+        if self.use_gpu_driven {
+            // Initialize GPU-driven renderer on first use if needed
+            if self.gpu_driven_renderer.is_none() {
+                println!("\x1b[36mINIT\x1b[0m GPU-driven renderer for {} objects", self.meshes.len());
+                self.gpu_driven_renderer = Some(GPUDrivenRenderer::new(device, self.surface_format));
+                self.gpu_memory_pool = Some(GPUMemoryPool::new(device));
+                println!("\x1b[32mOK\x1b[0m GPU-driven renderer initialized");
+            }
+            
+            // Check if we need to upload instances first
+            let needs_upload = self.gpu_driven_renderer
+                .as_ref()
+                .map(|r| r.get_stats().total_instances == 0 && !self.meshes.is_empty())
+                .unwrap_or(false);
+            
+            if needs_upload {
+                if let Some(ref mut gpu_renderer) = self.gpu_driven_renderer {
+                    // Create instances directly here to avoid borrowing issues
+                    let mut gpu_instances = Vec::new();
+                    
+                    for (i, mesh) in self.meshes.iter().enumerate() {
+                        if i < self.scene_data.entities.len() {
+                            let entity = &self.scene_data.entities[i];
+                            let transform = entity.get_transform_matrix();
+                            let color = if let Some(ref mat) = entity.material {
+                                match mat {
+                                    dsl::ast::MaterialDef::MeshBasic { color, .. } => *color,
+                                    _ => [1.0, 1.0, 1.0, 1.0],
+                                }
+                            } else {
+                                [1.0, 1.0, 1.0, 1.0]
+                            };
+                            
+                            // Calculate proper bounding radius from scale
+                            // Extract scale from the transform matrix diagonal
+                            let matrix_array = transform.to_cols_array_2d();
+                            let scale_x = matrix_array[0][0].abs();
+                            let scale_y = matrix_array[1][1].abs();
+                            let scale_z = matrix_array[2][2].abs();
+                            let scale_max = scale_x.max(scale_y).max(scale_z);
+                            let bounding_radius = scale_max * 1.5; // 1.5x for safety margin
+                            
+                            gpu_instances.push(GPUInstanceData {
+                                model_matrix: transform.to_cols_array_2d(),
+                                color,
+                                animation_time: 0.0,
+                                animation_speed: 1.0,
+                                animation_amplitude: 0.5,
+                                bounding_radius,
+                                visible: 1,  // Start as visible
+                                _padding: [0, 0, 0],
+                            });
+                        }
+                    }
+                    
+                    if !gpu_instances.is_empty() {
+                        gpu_renderer.upload_instances(&gpu_instances, queue);
+                    }
+                }
+            }
+            
+            if let Some(ref mut gpu_renderer) = self.gpu_driven_renderer {
+                let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                    label: Some("GPU-Driven Render Encoder"),
+                });
+                
+                // Update camera and material uniforms for GPU-driven renderer
+                gpu_renderer.update_camera(
+                    queue,
+                    self.camera.view.to_cols_array_2d(),
+                    self.camera.projection.to_cols_array_2d(),
+                    [self.camera.position.x, self.camera.position.y, self.camera.position.z],
+                );
+                
+                // Use a default material for now
+                gpu_renderer.update_material(queue, [1.0, 1.0, 1.0, 1.0], 1.0);
+                
+                // Prepare culling uniforms
+                let view_proj = self.camera.projection * self.camera.view;
+                let culling = CullingUniforms {
+                    view_proj: view_proj.to_cols_array_2d(),
+                    camera_pos: [self.camera.position.x, self.camera.position.y, self.camera.position.z],
+                    instance_count: self.meshes.len() as u32,
+                    frustum_planes: [[0.0; 4]; 6],  // Would be computed from view_proj
+                    lod_distances: [10.0, 25.0, 50.0, 100.0],
+                };
+                
+                // Execute GPU-driven pipeline
+                gpu_renderer.render(
+                    &mut encoder,
+                    view,
+                    depth_view,
+                    &culling,
+                    self.time / 60.0,  // Approximate delta time
+                    queue,
+                );
+                
+                queue.submit(std::iter::once(encoder.finish()));
+                
+                // Track performance metrics for GPU-driven rendering
+                let stats = gpu_renderer.get_stats();
+                self.perf_overlay.record_draw_call(); // GPU-driven uses 1 indirect draw call
+                self.perf_overlay.record_triangles((stats.visible_instances * 12) as u32); // Approximate triangles
+                
+                // Log stats periodically
+                if self.time as u32 % 60 == 0 {
+                    let stats = gpu_renderer.get_stats();
+                    println!("\x1b[36mGPU\x1b[0m {} total, {} visible, {} culled", 
+                        stats.total_instances, stats.visible_instances, stats.culled_instances);
+                }
+                
+                // Render performance overlay on top of everything
+                self.perf_overlay.render(device, queue, view);
+                
+                return;
+            }
+        }
+        
+        // Original rendering path continues below...
+        // Detect if scene is static (no behaviors means static)
+        let is_static = self.behavior_system.is_empty();
+        let needs_instance_rebuild = !self.static_scene || !is_static;
+        self.static_scene = is_static;
+        
+        // Only clear instances if scene is dynamic or just became static
+        if needs_instance_rebuild {
+            self.instanced_renderer.clear();
+        }
+        
+        // Update frustum for culling
+        let view_proj = self.camera.projection * self.camera.view;
+        self.instanced_renderer.update_frustum(&view_proj);
+        
         // Clear first
-        if self.meshes.is_empty() {
+        if self.meshes.is_empty() && self.scene_data.entities.is_empty() {
             // Just clear if no meshes
             let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("Clear Encoder"),
@@ -827,7 +1251,145 @@ impl Renderer3D {
             return;
         }
         
-        // Render each mesh with proper uniform updates
+        // Collect instances for batching (only if needed)
+        let mut non_instanced_meshes = Vec::new();
+        
+        if needs_instance_rebuild {
+            for (i, mesh) in self.meshes.iter().enumerate() {
+                if i < self.scene_data.entities.len() {
+                    let entity = &self.scene_data.entities[i];
+                    
+                    // Check if this mesh type can be instanced (e.g., primitives)
+                    if matches!(entity.mesh, crate::entity::MeshSource::Primitive(_)) {
+                        // Get color from material
+                        let color = if let Some(ref mat) = entity.material {
+                            match mat {
+                                dsl::ast::MaterialDef::MeshBasic { color, .. } => *color,
+                                _ => [1.0, 1.0, 1.0, 1.0],
+                            }
+                        } else {
+                            [1.0, 1.0, 1.0, 1.0]
+                        };
+                        
+                        // Add to instanced renderer
+                        let transform = mesh.transform.to_matrix();
+                        self.instanced_renderer.add_instance(entity, &transform, color);
+                    } else {
+                        non_instanced_meshes.push(i);
+                    }
+                }
+            }
+        }
+        
+        // Update instance buffers
+        self.instanced_renderer.update_buffers(device, queue);
+        
+        // Get instancing stats and log them
+        let stats = self.instanced_renderer.get_stats();
+        if stats.draw_calls_saved > 0 || stats.objects_culled > 0 {
+            println!("⚡ Instanced rendering: {} objects in {} groups (saved {} draw calls, culled {} objects)", 
+                stats.total_instances, stats.instance_groups, stats.draw_calls_saved, stats.objects_culled);
+        }
+        
+        // Render instanced meshes if we have any
+        if stats.total_instances > 0 && self.instanced_pipeline.is_some() {
+            // Update camera uniforms
+            let camera_uniforms = CameraUniforms {
+                view: self.camera.view,
+                proj: self.camera.projection,
+                position: self.camera.position,
+                _padding: 0.0,
+            };
+            
+            if let Some(ref camera_buffer) = self.instanced_camera_buffer {
+                queue.write_buffer(camera_buffer, 0, bytemuck::cast_slice(&[camera_uniforms]));
+            }
+            
+            // Create single render pass for all instanced groups
+            let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Instanced Render Encoder"),
+            });
+            
+            {
+                let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("Instanced Render Pass"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(Operations {
+                            load: LoadOp::Clear(1.0),
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                
+                if let Some(ref pipeline) = self.instanced_pipeline {
+                    render_pass.set_pipeline(pipeline);
+                    
+                    if let Some(ref camera_bind_group) = self.instanced_camera_bind_group {
+                        render_pass.set_bind_group(0, camera_bind_group, &[]);
+                    }
+                    
+                    // Render each instance chunk
+                    for (_key, instance_buffer, instance_count) in self.instanced_renderer.get_all_chunks() {
+                        // Update material uniforms based on the group
+                        let material_uniforms = MaterialUniforms {
+                            color: [1.0, 1.0, 1.0, 1.0], // Default white, instances have their own colors
+                            opacity: 1.0,
+                            _padding1: [0.0; 3],
+                            _padding2: [0.0; 3],
+                            _padding3: 0.0,
+                        };
+                        
+                        if let Some(ref material_buffer) = self.instanced_material_buffer {
+                            queue.write_buffer(material_buffer, 0, bytemuck::cast_slice(&[material_uniforms]));
+                        }
+                        
+                        if let Some(ref material_bind_group) = self.instanced_material_bind_group {
+                            render_pass.set_bind_group(1, material_bind_group, &[]);
+                        }
+                        
+                        // Find a mesh with matching type to use as template
+                        if let Some(mesh) = self.meshes.iter().find(|_m| {
+                            // Check if this mesh matches the instance key
+                            // This is a simplified check - you might need to improve this
+                            true
+                        }) {
+                            // Set vertex buffer from template mesh
+                            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                            render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                            render_pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint16);
+                            
+                            // Track performance metrics
+                            self.perf_overlay.record_draw_call();
+                            self.perf_overlay.record_triangles((mesh.indices.len() as u32 / 3) * instance_count);
+                            
+                            // Draw all instances with one call
+                            render_pass.draw_indexed(0..mesh.indices.len() as u32, 0, 0..instance_count);
+                        }
+                    }
+                }
+            }
+            
+            queue.submit(std::iter::once(encoder.finish()));
+            
+            // Render non-instanced meshes and UI
+            self.render_non_instanced(device, queue, view, depth_view, &non_instanced_meshes);
+            return;
+        }
+        
+        // Fall back to individual rendering if no instancing
+        // Render each mesh with proper uniform updates (non-instanced meshes and fallback)
         for (i, mesh) in self.meshes.iter().enumerate() {
             let uniforms = Uniforms {
                 view_proj: self.camera.view_projection,
@@ -914,6 +1476,89 @@ impl Renderer3D {
         self.perf_overlay.render(device, queue, view);
     }
     
+    fn render_non_instanced(&mut self, device: &Device, queue: &Queue, view: &TextureView, depth_view: &TextureView, non_instanced_indices: &[usize]) {
+        // Render non-instanced meshes only
+        for (_idx, &mesh_idx) in non_instanced_indices.iter().enumerate() {
+            if mesh_idx >= self.meshes.len() {
+                continue;
+            }
+            
+            let mesh = &self.meshes[mesh_idx];
+            let uniforms = Uniforms {
+                view_proj: self.camera.view_projection,
+                model: mesh.transform.to_matrix(),
+                time: self.time,
+                _pad: [0.0; 3],
+            };
+            
+            queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+            
+            if let Some(ref material) = mesh.material {
+                material.update(queue);
+            }
+            
+            let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+                label: Some(&format!("Non-instanced Render Encoder {}", mesh_idx)),
+            });
+            
+            {
+                let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some(&format!("Non-instanced Render Pass {}", mesh_idx)),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Load, // Don't clear, we've already rendered instanced
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(Operations {
+                            load: LoadOp::Load,
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                
+                if let Some(ref material) = mesh.material {
+                    if let Some(pipeline) = material.get_pipeline() {
+                        render_pass.set_pipeline(pipeline);
+                        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                        if let Some(bind_group) = material.get_bind_group() {
+                            render_pass.set_bind_group(1, bind_group, &[]);
+                        }
+                    } else {
+                        render_pass.set_pipeline(&self.render_pipeline);
+                        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                    }
+                } else {
+                    render_pass.set_pipeline(&self.render_pipeline);
+                    render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                }
+                
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint16);
+                
+                self.perf_overlay.record_draw_call();
+                self.perf_overlay.record_triangles(mesh.indices.len() as u32 / 3);
+                
+                render_pass.draw_indexed(0..mesh.indices.len() as u32, 0, 0..1);
+            }
+            
+            queue.submit(std::iter::once(encoder.finish()));
+        }
+        
+        // Render UI on top
+        self.ui_system.render(device, queue, view, depth_view);
+        
+        // Render performance overlay on top of everything
+        self.perf_overlay.render(device, queue, view);
+    }
+    
     pub fn resize(&mut self, new_width: u32, new_height: u32) {
         // Update aspect ratio
         self.aspect_ratio = new_width as f32 / new_height as f32;
@@ -959,6 +1604,39 @@ impl Renderer3D {
             self.perf_overlay.toggle();
             let status = if self.perf_overlay.is_enabled() { "ON" } else { "OFF" };
             self.ui_system.add_log_entry(&format!("📊 Performance overlay: {}", status));
+            return;
+        }
+        
+        // Start benchmark with F2
+        if matches!(event.physical_key, PhysicalKey::Code(KeyCode::F2)) 
+            && matches!(event.state, winit::event::ElementState::Pressed) {
+            if self.benchmark.is_none() {
+                // Use a descriptive name based on entity count
+                let scene_name = format!("scene_{}_objects", self.scene_data.entities.len());
+                self.start_benchmark(scene_name);
+                self.ui_system.add_log_entry("BENCHMARK: Started (10 seconds)");
+            } else {
+                self.ui_system.add_log_entry("⚠️ Benchmark already running");
+            }
+            return;
+        }
+        
+        // Stop benchmark with F3
+        if matches!(event.physical_key, PhysicalKey::Code(KeyCode::F3)) 
+            && matches!(event.state, winit::event::ElementState::Pressed) {
+            if self.benchmark.is_some() {
+                self.stop_benchmark();
+                self.ui_system.add_log_entry("⏹️ Benchmark stopped");
+            }
+            return;
+        }
+        
+        // Toggle GPU-driven rendering with F4
+        if matches!(event.physical_key, PhysicalKey::Code(KeyCode::F4)) 
+            && matches!(event.state, winit::event::ElementState::Pressed) {
+            self.toggle_gpu_driven_rendering(_device);
+            let mode = if self.use_gpu_driven { "GPU-DRIVEN" } else { "TRADITIONAL" };
+            self.ui_system.add_log_entry(&format!("🚀 Renderer mode: {}", mode));
             return;
         }
         

@@ -1,0 +1,22 @@
+; Test file for improved error formatting
+(defbehavior test-behavior
+  (state (speed 1.0))
+  (update (dt)
+    ; This will cause an error - undefined function
+    (undefined-function x y z)))
+
+(defscene3d test-error-scene
+  ; This will cause another error - unknown form type
+  (unknown-form test
+    (position 0 0 0))
+  
+  ; Valid object for comparison
+  (object test-cube cube
+    (position 0 0 0)
+    (scale 1 1 1)
+    (material mesh-basic
+      (color 1 0 0)
+      (opacity 1.0)
+      (side front))
+    (behavior test-behavior))
+)

@@ -1,0 +1,2 @@
+timestamp,scene,total_objects,rendered,culled,draw_calls,fps_min,fps_max,fps_avg,frame_ms_min,frame_ms_max,frame_ms_avg,gpu_mb
+2025-09-02 00:47:26,scene_10006_objects,10006,10006,0,3,3.2,3.2,3.2,308.36,310.24,308.91,0.0

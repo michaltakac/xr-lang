@@ -59,6 +59,15 @@ impl Default for Transform {
     }
 }
 
+impl Transform {
+    pub fn to_matrix(&self) -> Mat4 {
+        let translation = Mat4::from_translation(self.position);
+        let rotation = Mat4::from_quat(self.rotation);
+        let scale = Mat4::from_scale(self.scale);
+        translation * rotation * scale
+    }
+}
+
 /// Material properties for rendering
 #[derive(Debug, Clone)]
 pub struct Material {
@@ -205,5 +214,11 @@ impl PrimitiveType {
             "tetrahedron" => Some(PrimitiveType::Tetrahedron { radius: 1.0 }),
             _ => None,
         }
+    }
+}
+
+impl Entity {
+    pub fn get_transform_matrix(&self) -> Mat4 {
+        self.transform.to_matrix()
     }
 }

@@ -17,6 +17,7 @@ log.workspace = true
 rusttype.workspace = true
 vm = { path = "../vm" }
 dsl = { path = "../dsl" }
+chrono = "0.4"
 
 # Model loading dependencies
 tobj = "4.0"  # For OBJ loading

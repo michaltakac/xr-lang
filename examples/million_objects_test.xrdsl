@@ -1,0 +1,171 @@
+; Stress test: 1 million objects in a 3D grid
+; Tests the instanced rendering optimization with massive object counts
+; Grid: 100x100x100 = 1,000,000 objects
+
+; Simple animation behaviors for variety
+(defbehavior wave-motion
+  (state 
+    (time 0.0)
+    (speed 2.0)
+    (amplitude 0.2)
+    (phase-offset 0.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ position.y 
+         (* amplitude (sin (+ (+ (+ (* speed time) phase-offset) position.x) position.z)))))))
+
+(defbehavior rotate-slow
+  (state (rot-speed 0.5))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* rot-speed dt)))))
+
+(defbehavior pulse-scale
+  (state 
+    (time 0.0)
+    (base-scale 0.15)
+    (pulse-speed 3.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (let ((scale-factor (+ 1.0 (* 0.2 (sin (* pulse-speed time))))))
+      (set! scale.x (* base-scale scale-factor))
+      (set! scale.y (* base-scale scale-factor))
+      (set! scale.z (* base-scale scale-factor)))))
+
+(defbehavior orbit-motion
+  (state 
+    (time 0.0)
+    (orbit-speed 1.0)
+    (orbit-radius 0.3))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.x (+ position.x (* orbit-radius (cos (* orbit-speed time)))))
+    (set! position.z (+ position.z (* orbit-radius (sin (* orbit-speed time)))))))
+
+(defscene3d million-objects-scene
+  (camera
+    (position 50 30 50)
+    (target 50 0 50)
+    (fov 60.0))
+
+  ; Input controls
+  (input
+    (camera-controls
+      (move-speed 10.0)
+      (rotate-speed 2.0)
+      (movement
+        (forward W)
+        (backward S)
+        (left A)
+        (right D)
+        (up Space)
+        (down Shift))
+      (rotation
+        (pitch-up Up)
+        (pitch-down Down)
+        (yaw-left Left)
+        (yaw-right Right))
+      (orbit-controls
+        (enabled true)
+        (sensitivity 1.0)
+        (damping 0.05)
+        (min-distance 2.0)
+        (max-distance 50.0)
+        (min-polar-angle 0.1)
+        (max-polar-angle 3.0)
+        (enable-zoom true)
+        (zoom-speed 1.0))))
+    
+  (lighting
+    (ambient 0.4 0.4 0.5)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 0.8)))
+  
+  ; Create a 100x100x100 grid of objects
+  ; Using nested dotimes for 3D grid generation
+  (dotimes (x 10)
+    (dotimes (y 10)
+      (dotimes (z 10)
+        ; Calculate object type based on position
+        ; This creates a pattern of different object types
+        (let ((obj-type (mod (+ x y z) 4))
+              (obj-name (format "obj_~a_~a_~a" x y z))
+              (pos-x x)
+              (pos-y y) 
+              (pos-z z)
+              (color-h (* (+ x y z) 3.6))  ; Hue varies by position
+              (behavior-type (mod (+ x z) 4)))
+          
+          ; Create different object types in a pattern
+          (cond
+            ; Spheres - 25% of objects
+            ((= obj-type 0)
+             (object obj-name sphere
+               (position pos-x pos-y pos-z)
+               (scale 0.15 0.15 0.15)
+               (material mesh-basic
+                 (color hsl color-h 80 60)
+                 (opacity 1.0)
+                 (side front))
+               (behavior 
+                 (cond
+                   ((= behavior-type 0) wave-motion)
+                   ((= behavior-type 1) pulse-scale)
+                   ((= behavior-type 2) orbit-motion)
+                   (else rotate-slow)))))
+            
+            ; Cubes - 25% of objects
+            ((= obj-type 1)
+             (object obj-name cube
+               (position pos-x pos-y pos-z)
+               (scale 0.15 0.15 0.15)
+               (material mesh-basic
+                 (color hsl (+ color-h 90) 80 60)
+                 (opacity 1.0)
+                 (side front))
+               (behavior rotate-slow)))
+            
+            ; Cones - 25% of objects
+            ((= obj-type 2)
+             (object obj-name cone
+               (position pos-x pos-y pos-z)
+               (scale 0.15 0.15 0.15)
+               (material mesh-basic
+                 (color hsl (+ color-h 180) 80 60)
+                 (opacity 1.0)
+                 (side front))
+               (behavior pulse-scale)))
+            
+            ; Pyramids - 25% of objects
+            (else
+             (object obj-name pyramid
+               (position pos-x pos-y pos-z)
+               (scale 0.15 0.15 0.15)
+               (material mesh-basic
+                 (color hsl (+ color-h 270) 80 60)
+                 (opacity 1.0)
+                 (side front))
+               (behavior wave-motion))))))))
+  
+  ; Add a ground plane for reference
+  (object ground plane
+    (position 50 -2 50)
+    (scale 120 1 120)
+    (material mesh-basic
+      (color hsl 220 20 10)
+      (side double)))
+  
+  ; UI info
+  (ui-element title text
+    (position 0 10 0)
+    (size 10 2)
+    (text "1 MILLION OBJECTS TEST")
+    (color 1.0 1.0 0.0 1.0))
+  
+  (ui-element info text
+    (position 0 8 0)
+    (size 12 1)
+    (text "100x100x100 Grid - Testing Instanced Rendering")
+    (color 0.8 0.8 0.8 0.8)))

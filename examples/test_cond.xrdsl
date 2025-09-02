@@ -1,0 +1,88 @@
+; Test cond macro implementation
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d test-cond
+  ; Test cond with simple conditions
+  (let ((type-a 0)
+        (type-b 1)
+        (type-c 2))
+    
+    ; Test case 1: should create a sphere
+    (cond
+      ((= type-a 0)
+       (sphere
+         :id "test_sphere"
+         :position [0 0 0]
+         :radius 0.5
+         :color [1 0 0]
+         :behavior spin))
+      ((= type-a 1)
+       (cube
+         :id "test_cube_a"
+         :position [0 0 0]
+         :size [1 1 1]
+         :color [0 1 0]
+         :behavior spin))
+      (else
+       (cylinder
+         :id "test_cylinder"
+         :position [0 0 0]
+         :radius 0.5
+         :height 1
+         :color [0 0 1]
+         :behavior spin)))
+    
+    ; Test case 2: should create a cube
+    (cond
+      ((= type-b 0)
+       (sphere
+         :id "test_sphere_b"
+         :position [2 0 0]
+         :radius 0.5
+         :color [1 0 0]
+         :behavior spin))
+      ((= type-b 1)
+       (cube
+         :id "test_cube_b"
+         :position [2 0 0]
+         :size [1 1 1]
+         :color [0 1 0]
+         :behavior spin))
+      (else
+       (cylinder
+         :id "test_cylinder_b"
+         :position [2 0 0]
+         :radius 0.5
+         :height 1
+         :color [0 0 1]
+         :behavior spin)))
+    
+    ; Test case 3: should create a cylinder (else case)
+    (cond
+      ((= type-c 0)
+       (sphere
+         :id "test_sphere_c"
+         :position [-2 0 0]
+         :radius 0.5
+         :color [1 0 0]
+         :behavior spin))
+      ((= type-c 1)
+       (cube
+         :id "test_cube_c"
+         :position [-2 0 0]
+         :size [1 1 1]
+         :color [0 1 0]
+         :behavior spin))
+      (else
+       (cylinder
+         :id "test_cylinder_c"
+         :position [-2 0 0]
+         :radius 0.5
+         :height 1
+         :color [0 0 1]
+         :behavior spin)))
+  )
+)

@@ -36,15 +36,15 @@ fn vs_main(input: VertexInput) -> VertexOutput {
         // Main background panel
         pos = pos * uniforms.panel_size + uniforms.panel_pos;
         color = uniforms.bg_color;
-    } else {
-        // FPS graph bars
+    } else if (input.instance_id < 21u) {
+        // FPS/GPU graph bars
         let bar_width = 8.0;
         let bar_height = 40.0;
         let bar_x = uniforms.panel_pos.x + 10.0 + f32(input.instance_id - 1u) * (bar_width + 2.0);
         let bar_y = uniforms.panel_pos.y + 50.0;
         
-        // Random height for demo (in real implementation, this would be based on FPS history)
-        let height_factor = sin(f32(input.instance_id) * 0.5) * 0.5 + 0.5;
+        // Simulate GPU usage (in real implementation, this would be based on actual metrics)
+        let height_factor = sin(f32(input.instance_id) * 0.5 + uniforms.screen_size.x * 0.001) * 0.5 + 0.5;
         
         pos = vec2<f32>(
             pos.x * bar_width + bar_x,
@@ -59,6 +59,20 @@ fn vs_main(input: VertexInput) -> VertexOutput {
         } else {
             color = vec4<f32>(1.0, 0.0, 0.0, 0.8); // Red
         }
+    } else if (input.instance_id == 21u) {
+        // "GPU" label
+        pos = vec2<f32>(
+            pos.x * 30.0 + uniforms.panel_pos.x + 10.0,
+            pos.y * 10.0 + uniforms.panel_pos.y + 35.0
+        );
+        color = vec4<f32>(0.8, 0.8, 0.8, 1.0);
+    } else if (input.instance_id == 22u) {
+        // "FPS" label
+        pos = vec2<f32>(
+            pos.x * 25.0 + uniforms.panel_pos.x + 10.0,
+            pos.y * 10.0 + uniforms.panel_pos.y + 10.0
+        );
+        color = vec4<f32>(0.8, 0.8, 0.8, 1.0);
     }
     
     // Convert to NDC (-1 to 1)

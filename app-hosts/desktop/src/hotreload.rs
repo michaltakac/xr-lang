@@ -6,6 +6,25 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
+
+// Helper function to show error at specific line
+fn show_error_at_line(lines: &[&str], line_num: usize, error_msg: &str) {
+    println!("   = {}", error_msg);
+    println!("   |");
+    
+    // Show context around the error line
+    let start = if line_num > 3 { line_num - 3 } else { 1 };
+    let end = std::cmp::min(line_num + 2, lines.len());
+    
+    for i in start..=end {
+        if i <= lines.len() {
+            let marker = if i == line_num { ">>>" } else { "   " };
+            println!("{} {:4} | {}", marker, i, lines.get(i - 1).unwrap_or(&""));
+        }
+    }
+    println!("   |");
+}
+
 #[derive(Debug, Clone)]
 pub enum SceneUpdate {
     Full(gpu::SceneData),
@@ -45,7 +64,7 @@ impl HotReloader {
 
         watcher.watch(watch_path.as_ref(), RecursiveMode::Recursive)?;
         
-        println!("📁 Watching for changes in: {}", watch_path.as_ref().display());
+        println!("\x1b[36mWATCH\x1b[0m {}", watch_path.as_ref().display());
         
         Ok(Self {
             _watcher: watcher,
@@ -93,7 +112,7 @@ impl SceneLoader {
     }
     
     pub fn load_scene_from_file(&mut self, file_path: &str) -> Result<Option<SceneUpdate>> {
-        println!("🔄 Reloading scene from: {}", file_path);
+        println!("\n\x1b[33mRELOAD\x1b[0m {}", file_path);
         
         // Read the file
         let content = std::fs::read_to_string(file_path)?;
@@ -106,30 +125,31 @@ impl SceneLoader {
         self.current_scene = Some(content.clone());
         
         // Parse DSL content with detailed error reporting
-        println!("🔍 Parsing DSL content ({} chars)...", content.len());
+        println!("\x1b[36mPARSE\x1b[0m {} ({} bytes)", file_path, content.len());
+        
         match dsl::parse(&content) {
             Ok(ast) => {
-                println!("✅ DSL Parse successful! Found {} top-level items", ast.len());
+                println!(";; Parse complete: {} top-level forms", ast.len());
                 
                 // Log what we found
                 for (i, item) in ast.iter().enumerate() {
                     match item {
-                        dsl::ast::Top::Behavior(b) => println!("  [{i}] Behavior: '{}' with {} state vars", b.name, b.state.len()),
-                        dsl::ast::Top::Scene3D(s) => println!("  [{i}] Scene3D: '{}' with {} objects", s.name, s.objects.len()),
+                        dsl::ast::Top::Behavior(b) => println!(";;   [{:2}] defbehavior {} [{} state variables]", i, b.name, b.state.len()),
+                        dsl::ast::Top::Scene3D(s) => println!(";;   [{:2}] defscene3d {} [{} objects]", i, s.name, s.objects.len()),
                     }
                 }
                 
                 // Convert AST to scene data with error handling
                 match self.extract_scene_from_ast_with_validation(&ast) {
                     Ok(Some(mut scene_data)) => {
-                        println!("✅ Scene conversion successful!");
+                        println!(";; => Scene ready");
                         // Add the AST to the scene data for hot-swapping
                         scene_data.ast = ast.clone();
                         
                         // Perform reconciliation if we have a previous scene
                         let update = if let Some(ref last_scene) = self.last_scene_data {
                             let changes = self.reconciler.diff_scenes(last_scene, &scene_data);
-                            println!("🔍 Reconciliation found {} changes", changes.len());
+                            println!("\x1b[36mDIFF\x1b[0m {} changes detected", changes.len());
                             
                             // Log changes for debugging
                             for change in &changes {
@@ -152,7 +172,7 @@ impl SceneLoader {
                             
                             SceneUpdate::Incremental { scene_data, changes }
                         } else {
-                            println!("📦 Initial scene load");
+                            println!("\x1b[36mLOAD\x1b[0m Initial scene");
                             SceneUpdate::Full(scene_data)
                         };
                         
@@ -169,7 +189,7 @@ impl SceneLoader {
                     }
                     Ok(None) => {
                         println!("⚠️ No valid Scene3D found in AST");
-                        println!("🔧 Available items: {:?}", ast.iter().map(|item| match item {
+                        println!("\x1b[2mDEBUG\x1b[0m Available items: {:?}", ast.iter().map(|item| match item {
                             dsl::ast::Top::Behavior(b) => format!("Behavior({})", b.name),
                             dsl::ast::Top::Scene3D(s) => format!("Scene3D({})", s.name),
                         }).collect::<Vec<_>>());
@@ -198,7 +218,7 @@ impl SceneLoader {
                     }
                     Err(validation_error) => {
                         println!("❌ Scene validation failed: {}", validation_error);
-                        println!("🔧 Creating fallback scene with parsed behaviors");
+                        println!("\x1b[33mWARN\x1b[0m Creating fallback scene with parsed behaviors");
                         
                         let fallback_scene = gpu::SceneData {
                             entities: Vec::new(),  // Empty entities for fallback
@@ -223,30 +243,22 @@ impl SceneLoader {
                     }
                 }
             }
-            Err(e) => {
-                println!("❌ DSL Parse Error Details:");
-                println!("   Error: {:?}", e);
-                println!("   File: {}", file_path);
-                println!("   Content preview (first 200 chars):");
-                println!("   │ {}", content.chars().take(200).collect::<String>().replace('\n', "\n   │ "));
-                
-                // Try to give more context about where the error occurred
-                if let Some(error_str) = format!("{:?}", e).split("at line").nth(1) {
-                    if let Some(line_num_str) = error_str.split_whitespace().next() {
-                        if let Ok(line_num) = line_num_str.parse::<usize>() {
-                            println!("   Context around line {}:", line_num);
-                            let lines: Vec<&str> = content.lines().collect();
-                            let start = if line_num > 3 { line_num - 3 } else { 0 };
-                            let end = std::cmp::min(line_num + 3, lines.len());
-                            for i in start..end {
-                                let marker = if i + 1 == line_num { ">>> " } else { "    " };
-                                println!("   {}{:3}: {}", marker, i + 1, lines.get(i).unwrap_or(&""));
-                            }
-                        }
+            Err(parse_err) => {
+                // Enhanced error reporting with position tracking
+                if let Some(span) = parse_err.span() {
+                    println!("\x1b[31mERROR\x1b[0m at {}:{}: {}", 
+                        span.start.line, span.start.column, parse_err);
+                    
+                    // Show the error location in context
+                    let lines: Vec<&str> = content.lines().collect();
+                    if span.start.line > 0 && span.start.line <= lines.len() {
+                        show_error_at_line(&lines, span.start.line, &parse_err.to_string());
                     }
+                } else {
+                    println!("\x1b[31mERROR\x1b[0m {}", parse_err);
                 }
                 
-                println!("🔧 Creating fallback scene due to parse error");
+                println!("\x1b[33mWARN\x1b[0m Creating fallback scene due to parse error");
                 let fallback_scene = gpu::SceneData {
                     entities: Vec::new(),  // Empty entities for fallback
                     ui_elements: vec![],
@@ -285,7 +297,7 @@ impl SceneLoader {
                     name: behavior.name.clone(),
                     state,
                 });
-                println!("📋 Extracted behavior: '{}' with state {:?}", behavior.name, behavior.state);
+                println!("\x1b[2m  => behavior: {} ({} state vars)\x1b[0m", behavior.name, behavior.state.len());
             }
         }
         
@@ -298,7 +310,7 @@ impl SceneLoader {
         // Find Scene3D
         for item in ast {
             if let dsl::ast::Top::Scene3D(scene) = item {
-                println!("🎬 Processing Scene3D: '{}'", scene.name);
+                println!("\x1b[36mPROCESS\x1b[0m scene: {}", scene.name);
                 
                 // Validate all behavior references
                 for obj in &scene.objects {
@@ -311,7 +323,7 @@ impl SceneLoader {
                                 behaviors.keys().cloned().collect::<Vec<_>>().join(", ")
                             ));
                         }
-                        println!("✓ Object '{}' → behavior '{}' (valid)", obj.name, behavior_name);
+                        println!("\x1b[2m  => object {} -> behavior {}\x1b[0m", obj.name, behavior_name);
                     }
                 }
                 
@@ -327,12 +339,12 @@ impl SceneLoader {
         let mut entities = Vec::new();
         let mut ui_elements = Vec::new();
         
-        println!("🔧 Converting {} objects and {} UI elements to scene data", 
+        println!("\x1b[36mCONVERT\x1b[0m {} objects, {} UI elements", 
             scene.objects.len(), scene.ui_elements.len());
         
         // Extract entities from scene
         for object in &scene.objects {
-            println!("  Processing object: '{}' ({})", object.name, object.mesh_type);
+            // Verbose: println!("  Processing object: '{}' ({})", object.name, object.mesh_type);
             
             // Determine mesh source - either a primitive or a model file
             let mesh_source = if let Some(primitive) = gpu::entity::PrimitiveType::from_type_string(&object.mesh_type) {
@@ -375,10 +387,10 @@ impl SceneLoader {
                 meta,
             };
             
-            println!("    ✓ Entity '{}': type={:?}, pos({:.1}, {:.1}, {:.1}), behavior: {:?}", 
-                entity.name, object.mesh_type,
-                entity.transform.position.x, entity.transform.position.y, entity.transform.position.z,
-                entity.behavior);
+            // Verbose: println!("    ✓ Entity '{}': type={:?}, pos({:.1}, {:.1}, {:.1}), behavior: {:?}", 
+            //     entity.name, object.mesh_type,
+            //     entity.transform.position.x, entity.transform.position.y, entity.transform.position.z,
+            //     entity.behavior);
             
             entities.push(entity);
         }
@@ -410,7 +422,7 @@ impl SceneLoader {
         
         // Parse lighting if available
         let lighting = scene.lighting.as_ref().map(|light| {
-            println!("💡 Lighting: ambient({:.1}, {:.1}, {:.1})", 
+            println!("\x1b[2m  => lighting: ambient({:.1}, {:.1}, {:.1})\x1b[0m", 
                 light.ambient[0], light.ambient[1], light.ambient[2]);
             if let Some(dir) = &light.directional {
                 println!("    ☀️ Directional: dir({:.1}, {:.1}, {:.1}), color({:.1}, {:.1}, {:.1}), intensity: {:.1}", 
@@ -441,7 +453,7 @@ impl SceneLoader {
             };
             
             if let Some(ref text) = ui.text {
-                println!("    📝 Text: '{}'", text);
+                println!("\x1b[2m    => text: '{}'\x1b[0m", text);
             }
             println!("    📍 Position: ({:.1}, {:.1}, {:.1})", ui.position[0], ui.position[1], ui.position[2]);
             
@@ -489,7 +501,7 @@ impl SceneLoader {
             }
         });
         
-        println!("✅ Scene conversion complete: {} entities, {} UI elements, {} behaviors", 
+        println!("\x1b[32mOK\x1b[0m Scene ready: {} entities, {} UI elements, {} behaviors", 
             entities.len(), ui_elements.len(), behaviors.len());
         
         Ok(gpu::SceneData { 
@@ -637,5 +649,4 @@ impl SceneLoader {
             _ => None,
         }
     }
-    
 }

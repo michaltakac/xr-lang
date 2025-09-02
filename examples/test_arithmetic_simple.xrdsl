@@ -1,0 +1,25 @@
+(scene
+  ; Test multi-argument arithmetic operations
+  (let ((sum (+ 1 2 3))       ; Should be 6
+        (product (* 2 3 4))    ; Should be 24
+        (diff (- 10 3 2)))     ; Should be 5
+    
+    (cube 
+      :id "test_sum"
+      :position [sum 0 0]      ; Position at x=6
+      :size [1 1 1]
+      :color [0.5 0.5 0.5]
+    )
+    
+    (dotimes (i 3)
+      (let ((multi-sum (+ i 1 2 3)))  ; Test multi-arg addition with variable
+        (sphere
+          :id (format "sphere_~a" i)
+          :position [multi-sum i 0]
+          :radius 0.5
+          :color [0.2 0.4 0.6]
+        )
+      )
+    )
+  )
+)

@@ -1,0 +1,110 @@
+; Stress test with 10,000 objects using optimized instanced rendering
+; Tests chunked buffer management for large object counts
+
+; Simple rotation behavior
+(defbehavior rotate
+  (state (speed 0.5))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+; Wave animation
+(defbehavior wave
+  (state 
+    (time 0.0)
+    (base-y 0.0)
+    (speed 2.0)
+    (amplitude 0.5))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ base-y (* amplitude (sin (+ (* speed time) (* 0.2 position.x) (* 0.2 position.z))))))))
+
+(defscene3d stress-test-10k
+  (camera
+    (position 50 30 50)
+    (target 25 0 25)
+    (fov 60.0))
+
+  ; Input controls
+  (input
+    (camera-controls
+      (move-speed 10.0)
+      (rotate-speed 2.0)
+      (movement
+        (forward W)
+        (backward S)
+        (left A)
+        (right D)
+        (up Space)
+        (down Shift))
+      (rotation
+        (pitch-up Up)
+        (pitch-down Down)
+        (yaw-left Left)
+        (yaw-right Right))
+      (orbit-controls
+        (enabled true)
+        (sensitivity 1.0)
+        (damping 0.05)
+        (min-distance 2.0)
+        (max-distance 50.0)
+        (min-polar-angle 0.1)
+        (max-polar-angle 3.0)
+        (enable-zoom true)
+        (zoom-speed 1.0))))
+    
+  (lighting
+    (ambient 0.3 0.3 0.4)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.0)))
+  
+  ; Create a 100x100 grid of spheres = 10,000 objects
+  (dotimes (x 100)
+    (dotimes (z 100)
+      (let ((x-pos (* x 0.5))
+            (z-pos (* z 0.5))
+            (index (+ (* x 100) z))
+            (hue (* index 0.036)))  ; Spread colors across spectrum
+        
+        (object (format "sphere_~a" index) sphere
+          (position x-pos 0 z-pos)
+          (scale 0.15 0.15 0.15)
+          (material mesh-basic
+            (color hsl hue 80 60)
+            (opacity 1.0)
+            (side front))
+          (behavior wave)))))
+  
+  ; Add some larger landmark objects for reference
+  (dotimes (i 5)
+    (object (format "pillar_~a" i) cylinder
+      (position (* i 10) 2 (* i 10))
+      (scale 0.5 4 0.5)
+      (material mesh-basic
+        (color hsl (* i 72) 70 50)
+        (opacity 0.9)
+        (side front))
+      (behavior rotate)))
+  
+  ; Ground plane
+  (object ground plane
+    (position 25 -2 25)
+    (scale 60 1 60)
+    (material mesh-basic
+      (color hsl 220 20 10)
+      (side double)))
+  
+  ; Performance info
+  (ui-element title text
+    (position 0 12 0)
+    (size 8 1.5)
+    (text "10K STRESS TEST")
+    (color 1.0 1.0 0.0 1.0))
+  
+  (ui-element stats text
+    (position 0 10 0)
+    (size 10 1)
+    (text "10,000 Animated Spheres")
+    (color 0.9 0.9 0.9 0.9)))

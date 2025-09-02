@@ -1,0 +1,48 @@
+; Test multi-argument arithmetic operations
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(scene3d test-multi-arg
+  ; Test let binding with multi-argument arithmetic
+  (dotimes (x 3)
+    (dotimes (y 3)
+      (dotimes (z 3)
+        (let ((obj-type (mod (+ x y z) 4))  ; This now works with 3 arguments!
+              (obj-name (format "obj_~a_~a_~a" x y z))
+              (pos-x (* x 2))
+              (pos-y (* y 2)) 
+              (pos-z (* z 2)))
+          
+          (cond
+            ((= obj-type 0)
+             (sphere
+               :id obj-name
+               :position [pos-x pos-y pos-z]
+               :radius 0.4
+               :color [(* x 0.3) (* y 0.3) (* z 0.3)]
+               :behavior spin))
+            
+            ((= obj-type 1)
+             (cube
+               :id obj-name
+               :position [pos-x pos-y pos-z]
+               :size [0.8 0.8 0.8]
+               :color [(* x 0.3) (* y 0.3) (* z 0.3)]
+               :behavior spin))
+            
+            (else
+             (cylinder
+               :id obj-name
+               :position [pos-x pos-y pos-z]
+               :radius 0.4
+               :height 0.8
+               :color [(* x 0.3) (* y 0.3) (* z 0.3)]
+               :behavior spin))
+          )
+        )
+      )
+    )
+  )
+)

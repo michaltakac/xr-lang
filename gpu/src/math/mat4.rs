@@ -10,6 +10,11 @@ pub struct Mat4 {
 }
 
 impl Mat4 {
+    /// Convert to 2D array format for GPU buffers
+    pub fn to_cols_array_2d(&self) -> [[f32; 4]; 4] {
+        self.cols
+    }
+    
     pub const IDENTITY: Self = Self {
         cols: [
             [1.0, 0.0, 0.0, 0.0],

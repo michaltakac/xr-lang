@@ -178,13 +178,73 @@ fn parse_alpha_component(expr: &Expr) -> anyhow::Result<f32> {
     Ok(value)
 }
 
-/// Parse float from expression
+/// Parse float from expression (evaluating arithmetic if needed)
 fn parse_float_expr(expr: &Expr) -> anyhow::Result<f32> {
     match expr {
         Expr::F32(f) => Ok(*f),
         Expr::I32(i) => Ok(*i as f32),
+        Expr::List(parts) if !parts.is_empty() => {
+            // Handle arithmetic expressions
+            if let Expr::Sym(op) = &parts[0] {
+                evaluate_arithmetic_expr(op, &parts[1..])
+            } else {
+                anyhow::bail!("Expected a number, got {:?}", expr)
+            }
+        }
         _ => anyhow::bail!("Expected a number, got {:?}", expr),
     }
+}
+
+/// Evaluate simple arithmetic expressions for color values
+fn evaluate_arithmetic_expr(op: &str, args: &[Expr]) -> anyhow::Result<f32> {
+    if args.is_empty() {
+        anyhow::bail!("{} requires at least one argument", op);
+    }
+    
+    // Recursively evaluate all arguments
+    let mut values = Vec::new();
+    for arg in args {
+        values.push(parse_float_expr(arg)?);
+    }
+    
+    // Compute the result based on the operation
+    let result = match op {
+        "+" => values.iter().sum::<f32>(),
+        "-" => {
+            if values.len() == 1 {
+                -values[0]
+            } else {
+                let mut result = values[0];
+                for val in &values[1..] {
+                    result -= val;
+                }
+                result
+            }
+        },
+        "*" => values.iter().product::<f32>(),
+        "/" => {
+            if values.len() < 2 {
+                anyhow::bail!("/ requires at least 2 arguments");
+            }
+            let mut result = values[0];
+            for val in &values[1..] {
+                if *val == 0.0 {
+                    anyhow::bail!("Division by zero");
+                }
+                result /= val;
+            }
+            result
+        },
+        "mod" => {
+            if values.len() != 2 {
+                anyhow::bail!("mod requires exactly 2 arguments");
+            }
+            values[0] % values[1]
+        },
+        _ => anyhow::bail!("Unknown arithmetic operator: {}", op),
+    };
+    
+    Ok(result)
 }
 
 /// Convert HSL to RGB

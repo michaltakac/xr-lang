@@ -1,0 +1,53 @@
+; Extreme stress test - Maximum object count
+; 100x100x10 = 100,000 animated objects
+
+(defbehavior wave
+  (state (time 0.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y (* 0.5 (sin (+ time (* 0.05 position.x) (* 0.05 position.z)))))))
+
+(defscene3d extreme-stress
+  (camera
+    (position 50 30 80)
+    (target 50 0 50)
+    (fov 70.0))
+    
+  (lighting
+    (ambient 0.4 0.4 0.5)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 0.8)))
+  
+  ; 100x100 grid of spheres, 10 layers = 100,000 objects
+  (dotimes (layer 10)
+    (dotimes (x 10)
+      (dotimes (z 10)
+        (object (format "s_~a_~a_~a" layer x z) sphere
+          (position x (* layer 2) z)
+          (scale 0.05 0.05 0.05)
+          (material mesh-basic
+            (color hsl 3.6 90 60)
+            (opacity 1.0)
+            (side front))
+          (behavior wave)))))
+  
+  ;; (object ground plane
+  ;;   (position 50 -2 50)
+  ;;   (scale 120 1 120)
+  ;;   (material mesh-basic
+  ;;     (color hsl 220 15 8)
+  ;;     (side double)))
+  
+  ;; (ui-element title text
+  ;;   (position 0 15 0)
+  ;;   (size 10 2)
+  ;;   (text "100,000 OBJECTS")
+  ;;   (color 1.0 0.2 0.2 1.0))
+  
+  ;; (ui-element subtitle text
+  ;;   (position 0 13 0)
+  ;;   (size 12 1)
+  ;;   (text "Extreme Instanced Rendering Test")
+  ;;   (color 1.0 1.0 1.0 0.9)))

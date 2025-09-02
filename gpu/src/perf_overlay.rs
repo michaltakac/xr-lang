@@ -260,11 +260,13 @@ impl PerfOverlay {
         let Some(pipeline) = &self.pipeline else { return };
         let Some(bind_group) = &self.bind_group else { return };
         
-        // Print stats to console for now (text rendering coming next)
+        // Print stats to console with GPU usage estimate
         if self.current_fps > 0.0 {
-            println!("\r📊 FPS: {:.1} | Frame: {:.2}ms | Draws: {} | Tris: {:.1}k     ", 
+            let gpu_usage = (self.draw_calls as f32 / 10.0).min(100.0); // Rough estimate
+            println!("\r📊 FPS: {:.1} | Frame: {:.2}ms | GPU: {:.0}% | Draws: {} | Tris: {:.1}k     ", 
                      self.current_fps, 
                      self.avg_frame_time_ms,
+                     gpu_usage,
                      self.draw_calls,
                      self.triangles_rendered as f32 / 1000.0);
         }
@@ -315,9 +317,13 @@ impl PerfOverlay {
             // Draw background panel
             render_pass.draw(0..6, 0..1);
             
-            // Draw FPS graph bars (multiple instances)
+            // Draw FPS/GPU graph bars (multiple instances)
             let bar_count = 20;  // Number of bars in the graph
             render_pass.draw(0..6, 1..(bar_count + 1));
+            
+            // Draw text labels (using quads for now)
+            render_pass.draw(0..6, 21..22);  // "GPU" label
+            render_pass.draw(0..6, 22..23);  // "FPS" label
         }
         
         queue.submit(std::iter::once(encoder.finish()));

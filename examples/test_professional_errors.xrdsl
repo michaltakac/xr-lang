@@ -1,0 +1,35 @@
+; Test professional error reporting with suggestions
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d test-professional-errors
+  ; Test various error conditions
+  
+  ; Error 1: Unknown object type
+  (unknownshape test1
+    (position 0 0 0)
+    (scale 1 1 1))
+  
+  ; Valid cube for reference
+  (object cube1 cube
+    (position 2 0 0)
+    (scale 1 1 1)
+    (material mesh-basic
+      (color 1 0 0)
+      (opacity 1.0)
+      (side front))
+    (behavior spin))
+  
+  ; Error 2: Invalid color format (will be caught)
+  (object sphere1 sphere
+    (position -2 0 0)
+    (radius 0.5)
+    (material mesh-basic
+      ; This would error if not for our arithmetic support
+      (color hsl (+ 120 60) 80 60)
+      (opacity 1.0)
+      (side front))
+    (behavior spin))
+)

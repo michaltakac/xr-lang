@@ -1,0 +1,73 @@
+; Test example for let and cond features
+; Creates objects with conditional types and local variables
+
+(defbehavior spin
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defscene3d let-cond-test
+  (camera
+    (position 10 10 15)
+    (target 5 0 5)
+    (fov 45.0))
+    
+  (lighting
+    (ambient 0.4 0.4 0.5)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.0)))
+  
+  ; Test let bindings
+  (dotimes (i 10)
+    (dotimes (j 10)
+      (let ((x-pos (* i 1.2))
+            (z-pos (* j 1.2))
+            (index (+ (* i 10) j))
+            (obj-type (mod index 3)))
+        
+        ; Test cond for object type selection
+        (cond
+          ((= obj-type 0)
+           (object (format "sphere_~a" index) sphere
+             (position x-pos 0 z-pos)
+             (scale 0.4 0.4 0.4)
+             (material mesh-basic
+               (color hsl (* index 3.6) 80 60)
+               (opacity 1.0)
+               (side front))
+             (behavior spin)))
+          
+          ((= obj-type 1)
+           (object (format "cube_~a" index) cube
+             (position x-pos 0 z-pos)
+             (scale 0.4 0.4 0.4)
+             (material mesh-basic
+               (color hsl (+ 120 (* index 3.6)) 80 60)
+               (opacity 1.0)
+               (side front))
+             (behavior spin)))
+          
+          (else
+           (object (format "cone_~a" index) cone
+             (position x-pos 0 z-pos)
+             (scale 0.4 0.4 0.4)
+             (material mesh-basic
+               (color hsl (+ 240 (* index 3.6)) 80 60)
+               (opacity 1.0)
+               (side front))
+             (behavior spin)))))))
+  
+  (object ground plane
+    (position 5 -1 5)
+    (scale 15 1 15)
+    (material mesh-basic
+      (color hsl 220 20 15)
+      (side double)))
+  
+  (ui-element title text
+    (position 0 8 0)
+    (size 6 1)
+    (text "Let & Cond Test")
+    (color 1.0 1.0 0.0 1.0)))

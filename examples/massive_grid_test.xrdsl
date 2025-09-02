@@ -1,0 +1,162 @@
+; Massive grid stress test for instanced rendering
+; Creates a large 3D grid with mixed object types
+; Adjust grid size for performance testing
+
+; Animation behaviors
+(defbehavior float-wave
+  (state 
+    (time 0.0)
+    (base-y 0.0)
+    (speed 1.5)
+    (amplitude 0.3))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! position.y 
+      (+ base-y (* amplitude (sin (+ (* speed time) (* 0.1 position.x) (* 0.1 position.z))))))))
+
+(defbehavior spin-y
+  (state (speed 1.0))
+  (update (dt)
+    (set! rotation.y (+ rotation.y (* speed dt)))))
+
+(defbehavior pulse
+  (state 
+    (time 0.0)
+    (base-scale 0.08)
+    (speed 2.0))
+  (update (dt)
+    (set! time (+ time dt))
+    (set! scale.x (* base-scale (+ 1.0 (* 0.3 (sin (* speed time))))))
+    (set! scale.y (* base-scale (+ 1.0 (* 0.3 (sin (* speed time))))))
+    (set! scale.z (* base-scale (+ 1.0 (* 0.3 (sin (* speed time))))))))
+
+(defscene3d massive-grid
+  (camera
+    (position 25 20 35)
+    (target 15 5 15)
+    (fov 60.0))
+    
+  (lighting
+    (ambient 0.35 0.35 0.4)
+    (directional
+      (direction 1 1 1)
+      (color 1.0 0.95 0.9)
+      (intensity 1.0)))
+  
+  ; Create a 50x20x50 grid = 50,000 objects
+  ; Layer 1: Spheres (bottom layer)
+  (dotimes (x 50)
+    (dotimes (z 50)
+      (object (format "sphere_~a_~a" x z) sphere
+        (position 
+          (* x 0.6)
+          0
+          (* z 0.6))
+        (scale 0.08 0.08 0.08)
+        (material mesh-basic
+          (color hsl (* (+ x z) 7.2) 85 65)
+          (opacity 1.0)
+          (side front))
+        (behavior float-wave))))
+  
+  ; Layer 2: Cubes 
+  (dotimes (x 50)
+    (dotimes (z 50)
+      (object (format "cube_~a_~a" x z) cube
+        (position 
+          (* x 0.6)
+          2
+          (* z 0.6))
+        (scale 0.08 0.08 0.08)
+        (material mesh-basic
+          (color hsl (+ 60 (* (+ x z) 7.2)) 85 65)
+          (opacity 1.0)
+          (side front))
+        (behavior spin-y))))
+  
+  ; Layer 3: Cones
+  (dotimes (x 50)
+    (dotimes (z 50)
+      (object (format "cone_~a_~a" x z) cone
+        (position 
+          (* x 0.6)
+          4
+          (* z 0.6))
+        (scale 0.08 0.08 0.08)
+        (material mesh-basic
+          (color hsl (+ 120 (* (+ x z) 7.2)) 85 65)
+          (opacity 1.0)
+          (side front))
+        (behavior pulse))))
+  
+  ; Layer 4: Pyramids
+  (dotimes (x 50)
+    (dotimes (z 50)
+      (object (format "pyramid_~a_~a" x z) pyramid
+        (position 
+          (* x 0.6)
+          6
+          (* z 0.6))
+        (scale 0.08 0.08 0.08)
+        (material mesh-basic
+          (color hsl (+ 180 (* (+ x z) 7.2)) 85 65)
+          (opacity 1.0)
+          (side front))
+        (behavior float-wave))))
+  
+  ; Layer 5: More spheres (top)
+  (dotimes (x 50)
+    (dotimes (z 50)
+      (object (format "sphere2_~a_~a" x z) sphere
+        (position 
+          (* x 0.6)
+          8
+          (* z 0.6))
+        (scale 0.08 0.08 0.08)
+        (material mesh-basic
+          (color hsl (+ 240 (* (+ x z) 7.2)) 85 65)
+          (opacity 1.0)
+          (side front))
+        (behavior spin-y))))
+  
+  ; Additional vertical pillars for visual effect
+  (dotimes (i 10)
+    (dotimes (y 20)
+      (object (format "pillar_~a_~a" i y) cylinder
+        (position 
+          (* i 3)
+          (* y 0.5)
+          (* i 3))
+        (scale 0.1 0.2 0.1)
+        (material mesh-basic
+          (color hsl (* i 36) 70 50)
+          (opacity 0.8)
+          (side front))
+        (behavior pulse))))
+  
+  ; Ground plane
+  (object ground plane
+    (position 15 -1 15)
+    (scale 40 1 40)
+    (material mesh-basic
+      (color hsl 220 20 12)
+      (side double)))
+  
+  ; Performance info UI
+  (ui-element title text
+    (position 0 12 0)
+    (size 8 1.5)
+    (text "MASSIVE GRID TEST")
+    (color 1.0 1.0 0.0 1.0))
+  
+  (ui-element stats text
+    (position 0 10 0)
+    (size 10 1)
+    (text "50x20x50 Grid + 200 Pillars = 50,200 Objects")
+    (color 0.9 0.9 0.9 0.9))
+  
+  (ui-element info text
+    (position 0 8 0)
+    (size 12 0.8)
+    (text "Testing Instanced Rendering Performance")
+    (color 0.7 0.7 0.7 0.8)))
