@@ -55,7 +55,7 @@
     (position -2 0 0)
     (scale 1 1 1)
     (material mesh-basic
-      (color #0a07b5)  ; Red in HEX
+      (color #ff4d00ff)  ; Red in HEX
       (opacity 1.0)
       (side front)))
   

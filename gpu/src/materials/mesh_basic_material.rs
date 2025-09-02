@@ -1,6 +1,5 @@
 //! MeshBasicMaterial implementation similar to Three.js
 
-use crate::math::*;
 use wgpu::*;
 use wgpu::util::DeviceExt;
 use bytemuck::{Pod, Zeroable};

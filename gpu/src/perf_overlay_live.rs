@@ -4,7 +4,7 @@
 use wgpu::*;
 use wgpu::util::DeviceExt;
 use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 const SAMPLE_COUNT: usize = 60;  // 60 frames of history for graph
 const UPDATE_INTERVAL_MS: u64 = 16;  // Update every frame (~60fps)

@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 use crate::runtime_state::{RuntimeState, AuthoringMode, CameraState};
-use crate::scene::SceneData;
 use crate::math::Vec3;
-use std::collections::HashMap;
 
 pub struct CodeSync {
     source_path: Option<PathBuf>,
