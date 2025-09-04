@@ -158,7 +158,7 @@ impl BehaviorSystem {
     
     
     /// Update a behavior for a specific object
-    pub fn update_behavior(&mut self, object_id: &str, behavior_name: &str, dt: f32) -> Result<BehaviorUpdate> {
+    pub fn update_behavior(&mut self, _object_id: &str, behavior_name: &str, dt: f32) -> Result<BehaviorUpdate> {
         // Execute the behavior in the interpreter
         self.interpreter.update_behavior(behavior_name, dt)?;
         

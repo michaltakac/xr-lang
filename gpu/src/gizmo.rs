@@ -590,7 +590,7 @@ impl TransformGizmo {
     }
     
     /// Start dragging operation
-    pub fn start_drag(&mut self, axis: GizmoAxis, ray_origin: Vec3, ray_direction: Vec3) {
+    pub fn start_drag(&mut self, axis: GizmoAxis, _ray_origin: Vec3, _ray_direction: Vec3) {
         self.is_dragging = true;
         self.active_axis = Some(axis);
         self.drag_start_transform = Some(self.object_transform);
@@ -685,7 +685,7 @@ impl GizmoSystem {
                         }
                     } else {
                         // Continue dragging
-                        if let Some(new_transform) = gizmo.apply_drag(ray_origin, ray_direction) {
+                        if let Some(_new_transform) = gizmo.apply_drag(ray_origin, ray_direction) {
                             // Return the object name that needs its transform updated
                             return Some(selected.clone());
                         }

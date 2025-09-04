@@ -529,11 +529,11 @@ impl MeshData {
     pub fn generate_capsule(radius: f32, height: f32, segments: u32) -> Self {
         // A capsule is a cylinder with hemisphere caps
         // For simplicity, we'll reuse sphere generation for caps
-        let indices: Vec<u32> = Vec::new();
+        let _indices: Vec<u32> = Vec::new();
         
         // Generate cylinder middle part
-        let cylinder_height = height - 2.0 * radius;
-        let half_height = cylinder_height / 2.0;
+        let _cylinder_height = height - 2.0 * radius;
+        let _half_height = _cylinder_height / 2.0;
         
         // Similar to cylinder generation but adjusted for capsule
         // ... (implementation details)

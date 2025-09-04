@@ -1,7 +1,7 @@
 //! Scene reconciliation system inspired by React Fiber
 //! Efficiently diffs and updates only changed parts of the scene
 
-use crate::scene::SceneData;
+use crate::scene::{SceneData, CameraData};
 use crate::entity::{Entity, MeshSource, Transform, MetaDirective, ModelSource};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -42,6 +42,8 @@ pub struct SceneReconciler {
     current_scene: Option<SceneData>,
     pending_changes: Vec<SceneChange>,
     model_cache: HashMap<String, Arc<ModelSource>>,
+    preserved_transforms: HashMap<String, Transform>,
+    preserved_camera: Option<CameraData>,
 }
 
 impl SceneReconciler {
@@ -50,11 +52,21 @@ impl SceneReconciler {
             current_scene: None,
             pending_changes: Vec::new(),
             model_cache: HashMap::new(),
+            preserved_transforms: HashMap::new(),
+            preserved_camera: None,
         }
     }
 
-    pub fn diff_scenes(&mut self, old_scene: &SceneData, new_scene: &SceneData) -> Vec<SceneChange> {
+    pub fn diff_scenes(&self, old_scene: &SceneData, new_scene: &SceneData) -> Vec<SceneChange> {
         let mut changes = Vec::new();
+
+        // Check for camera changes
+        if !self.cameras_equal(&old_scene.camera, &new_scene.camera) {
+            changes.push(SceneChange::CameraChanged {
+                old: old_scene.camera.clone(),
+                new: new_scene.camera.clone(),
+            });
+        }
 
         // Diff entities
         let old_entities: HashMap<String, &Entity> = old_scene.entities
@@ -305,7 +317,7 @@ impl SceneReconciler {
         }
     }
 
-    fn cameras_equal(&self, a: &Option<crate::CameraData>, b: &Option<crate::CameraData>) -> bool {
+    fn cameras_equal(&self, a: &Option<CameraData>, b: &Option<CameraData>) -> bool {
         match (a, b) {
             (None, None) => true,
             (Some(cam_a), Some(cam_b)) => {
@@ -369,6 +381,7 @@ impl SceneReconciler {
         }
     }
 
+
     pub fn batch_changes(&mut self, changes: Vec<SceneChange>) {
         self.pending_changes.extend(changes);
     }
@@ -402,6 +415,31 @@ impl SceneReconciler {
             false
         }
     }
+
+    // State preservation methods for hot-swapping
+    pub fn preserve_transform(&mut self, entity_id: &str, transform: Transform) {
+        self.preserved_transforms.insert(entity_id.to_string(), transform);
+    }
+
+    pub fn get_preserved_transforms(&self) -> &HashMap<String, Transform> {
+        &self.preserved_transforms
+    }
+
+    pub fn clear_preserved_transforms(&mut self) {
+        self.preserved_transforms.clear();
+    }
+
+    pub fn preserve_camera(&mut self, camera: CameraData) {
+        self.preserved_camera = Some(camera);
+    }
+
+    pub fn get_preserved_camera(&self) -> Option<CameraData> {
+        self.preserved_camera.clone()
+    }
+
+    pub fn clear_preserved_camera(&mut self) {
+        self.preserved_camera = None;
+    }
 }
 
 #[cfg(test)]
@@ -421,7 +459,7 @@ mod tests {
                 rotation: crate::Quat::IDENTITY,
                 scale: crate::Vec3::ONE,
             },
-            material: Material::default(),
+            material: None,
             behavior: None,
             children: Vec::new(),
             parent: None,
@@ -439,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_scene_diff_detects_entity_addition() {
-        let mut reconciler = SceneReconciler::new();
+        let reconciler = SceneReconciler::new();
         
         let old_scene = SceneData::default();
         let mut new_scene = old_scene.clone();
@@ -449,7 +487,7 @@ mod tests {
             name: "new_entity".to_string(),
             mesh: MeshSource::Primitive(crate::entity::PrimitiveType::sphere()),
             transform: Transform::default(),
-            material: Material::default(),
+            material: None,
             behavior: None,
             children: Vec::new(),
             parent: None,

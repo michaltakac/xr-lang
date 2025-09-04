@@ -1,6 +1,7 @@
 //! Terminal interface for the test runner
 
 use crate::runner::*;
+use crate::TestDef;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::*;
@@ -228,7 +229,7 @@ impl TestCli {
         let content = std::fs::read_to_string(path)?;
         let ast = dsl::parse(&content)?;
         
-        let mut tests = Vec::new();
+        let tests = Vec::new();
         for item in ast {
             // Check if it's a test definition
             if let dsl::ast::Top::Behavior(_) = item {
@@ -261,7 +262,7 @@ impl TestCli {
         Ok(tests)
     }
     
-    async fn record_test(&self, name: String, output: Option<PathBuf>) -> Result<()> {
+    async fn record_test(&self, name: String, _output: Option<PathBuf>) -> Result<()> {
         println!("{} Recording test: {}", "●".red().bold(), name);
         println!("Press {} to start recording, {} to stop\n", 
             "SPACE".green().bold(), 
@@ -273,7 +274,7 @@ impl TestCli {
         Ok(())
     }
     
-    async fn ai_generate_test(&self, description: String, output: Option<PathBuf>) -> Result<()> {
+    async fn ai_generate_test(&self, description: String, _output: Option<PathBuf>) -> Result<()> {
         println!("{} Generating test with AI...", "🤖".cyan());
         println!("Description: {}", description.italic());
         

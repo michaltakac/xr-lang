@@ -27,14 +27,17 @@ pub fn parse_test(expr: &dsl::ast::Expr) -> Result<TestDef> {
     
     let name = match &list[1] {
         dsl::ast::Expr::Sym(s) => s.clone(),
+        dsl::ast::Expr::Str(s) => s.clone(),
         dsl::ast::Expr::List(l) if !l.is_empty() => {
             if let dsl::ast::Expr::Sym(s) = &l[0] {
                 s.clone()
+            } else if let dsl::ast::Expr::Str(s) = &l[0] {
+                s.clone()
             } else {
-                anyhow::bail!("test name must be a symbol");
+                anyhow::bail!("test name must be a symbol or string");
             }
         }
-        _ => anyhow::bail!("test name must be a symbol"),
+        _ => anyhow::bail!("test name must be a symbol or string"),
     };
     
     let mut setup = None;
@@ -180,7 +183,8 @@ fn parse_action(expr: &dsl::ast::Expr) -> Result<TestAction> {
             }
             let name = match &list[1] {
                 dsl::ast::Expr::Sym(s) => s.clone(),
-                _ => anyhow::bail!("snapshot name must be a symbol"),
+                dsl::ast::Expr::Str(s) => s.clone(),
+                _ => anyhow::bail!("snapshot name must be a symbol or string"),
             };
             Ok(TestAction::RecordSnapshot { name })
         }
@@ -325,6 +329,7 @@ fn expr_to_test_value(expr: &dsl::ast::Expr) -> Result<TestValue> {
         dsl::ast::Expr::I32(n) => Ok(TestValue::I32(*n)),
         dsl::ast::Expr::Bool(b) => Ok(TestValue::Bool(*b)),
         dsl::ast::Expr::Sym(s) => Ok(TestValue::String(s.clone())),
+        dsl::ast::Expr::Str(s) => Ok(TestValue::String(s.clone())),
         dsl::ast::Expr::List(list) => {
             if list.len() == 3 {
                 // Try to parse as Vec3

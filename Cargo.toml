@@ -10,10 +10,25 @@ members = [
     "cv",
     "testing",
     "app-hosts/desktop",
-    "app-hosts/quest",
+    # "app-hosts/quest",  # Excluded by default - build with --package quest when targeting Android
     "app-hosts/web"
 ]
 resolver = "2"
+
+# Use default-members to exclude quest from default builds
+default-members = [
+    "dsl",
+    "ir",
+    "jit", 
+    "vm",
+    "gpu",
+    "xr",
+    "ai",
+    "cv",
+    "testing",
+    "app-hosts/desktop",
+    "app-hosts/web"
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -47,7 +62,8 @@ region = "3.0"
 # XR
 openxr = "0.18"
 
-# Android
+# Android (only used when building for Android)
+# These are workspace-level dependencies but only actually used by the quest app
 ndk = "0.8"
 ndk-glue = { version = "0.7", features = ["logger"] }
 

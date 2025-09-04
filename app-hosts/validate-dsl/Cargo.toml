@@ -1,0 +1,12 @@
+[package]
+name = "validate-dsl"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "validate-dsl"
+path = "src/main.rs"
+
+[dependencies]
+dsl = { path = "../../dsl" }
+colored = "2.0"

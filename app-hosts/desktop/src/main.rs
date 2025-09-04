@@ -5,10 +5,9 @@ mod hotreload;
 use anyhow::Result;
 use std::time::Instant;
 use winit::{
-    event::{Event, WindowEvent, KeyEvent, ElementState, MouseButton, MouseScrollDelta},
+    event::{Event, WindowEvent, MouseScrollDelta},
     event_loop::EventLoop,
     window::{Window},
-    keyboard::{KeyCode, PhysicalKey},
     dpi::PhysicalPosition,
 };
 use hotreload::{HotReloader, SceneLoader, SceneUpdate};

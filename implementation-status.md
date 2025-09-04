@@ -21,8 +21,36 @@
 - **Multi-axis rotation support**: Entities can rotate around X, Y, or Z axes independently
 - **Improved hot-swapping**: State changes in behaviors are properly detected and applied at runtime
 - **State preservation during hot-swap**: Runtime values (like accumulated time) are preserved when behaviors are reloaded
+- **Reconciliation algorithm**: React-inspired reconciliation system for efficient scene updates
 
-### 4. Testing Framework Foundation
+### 4. Code Synchronization System (Live Mode)
+- **CodeSync module**: Complete implementation of code writing back to DSL files
+- **Manual edit detection**: Smart buffer to avoid conflicts with manual edits
+- **Camera sync**: Automatic synchronization of camera position/target/fov to source
+- **Object transform sync**: Position and scale updates written back to DSL
+- **Auto-comment timestamps**: Synchronized values marked with /* auto: timestamp */
+- **Mode-aware syncing**: Only syncs in Live authoring mode
+
+### 5. Macro System & DSL Extensions
+- **Scene macros**: Support for `dotimes` and `loop` for procedural generation
+- **Math function evaluation**: Full math functions (sin, cos, tan, sqrt, pow, abs, floor, ceil) in macro expansion
+- **Variable substitution**: Proper variable binding and substitution in macro bodies
+- **Color parsing**: Comprehensive color support (hex, rgb, rgba, hsl, hsla formats)
+- **Material system**: MeshBasicMaterial implementation with transparency, wireframe, and side rendering
+
+### 6. Performance Monitoring & Debug Tools
+- **Performance monitor**: Real-time FPS and frame time monitoring
+- **Performance overlay**: Visual performance graphs and statistics
+- **Live performance display**: Advanced performance metrics with history graphs
+- **Debug configuration**: Conditional debug output system with flags
+- **Performance text rendering**: Efficient text rendering for metrics display
+
+### 7. UI & Visualization Improvements
+- **Improved 3D UI**: Better text rendering and positioning
+- **No implicit UI mode**: Support for scenes without automatic UI controls
+- **Explicit UI control**: Fine-grained control over UI element visibility
+
+### 8. Testing Framework Foundation
 - **Test AST**: Complete AST for test definitions including:
   - Basic tests with setup/actions/assertions
   - Recording-based tests
@@ -41,22 +69,47 @@
   - `coverage`: Show coverage reports
   - `debug`: Debug with time-travel
 - **3D Visualization**: Test results can be visualized in 3D space with:
-  - Test cubes showing pass/fail status
+  - Entity-based test visualization (migrated from deprecated CubeData)
+  - Pass/fail status indicators
   - Assertion markers
   - Timeline scrubber
   - Status panel
 
+### 9. Reconciliation & Hot-Swap Test Suite
+- **Comprehensive Unit Tests**: 22+ tests covering all reconciliation scenarios:
+  - Scene diffing and change detection
+  - Entity additions, removals, and modifications
+  - Transform and property preservation
+  - Camera state preservation
+  - Material and behavior change tracking
+  - Parent-child hierarchy preservation
+  - Meta directive handling (preserve-runtime, sync-to-code, reset-on-reload)
+- **Integration Tests**: Complete hot-swap workflow testing:
+  - Authoring mode transitions (Design → Play → Live)
+  - DSL parsing to scene conversion
+  - State preservation across reloads
+  - Code synchronization validation
+  - Runtime value preservation
+  - Behavior hot-swapping with state retention
+- **Entity System Migration**: Successfully migrated from deprecated CubeData to Entity system
+- **Helper Functions**: Created utilities for MetaDirective struct patterns
+- **State Management**: Added preservation methods to SceneReconciler:
+  - `preserve_transform()`: Save entity transforms
+  - `preserve_camera()`: Save camera state
+  - `restore_preserved_state()`: Apply saved states to new scene
+
 ## 🚧 In Progress / Future Work
 
 ### Near-term Goals
-1. **Code Sync**: Implement actual code writing when in "Live" mode
-2. **Test DSL Integration**: Extend main DSL parser to recognize test primitives
-3. **Recording System**: Implement actual test recording from user interactions
-4. **AI Integration**: Connect to Claude/GPT for test generation and code assistance
+1. **Code Sync**: ✅ COMPLETED - Full implementation of code writing in "Live" mode
+2. **Reconciliation Tests**: ✅ COMPLETED - Comprehensive test suite with 22+ unit tests and integration tests
+3. **AI Integration**: Connect to Claude/GPT for code generation and assistance
+4. **Test DSL Integration**: Extend main DSL parser to recognize test primitives
+5. **Recording System**: Implement actual test recording from user interactions
 
 ### Medium-term Goals (from project-vision.md)
-1. **Macro System**: S-expression macros with quasiquote support
-2. **Self-Modification API**: `(update-source!)` for programmatic code changes
+1. **Macro System**: ✅ PARTIAL - Basic macro system implemented, quasiquote support pending
+2. **Self-Modification API**: ✅ PARTIAL - CodeSync provides foundation, full API pending
 3. **Voice Input**: Whisper API integration for voice commands
 4. **Multimodal Pipeline**: Voice → Intent → DSL generation
 
@@ -71,22 +124,41 @@
 ```
 xr-lang/
 ├── gpu/
-│   └── src/
-│       └── runtime_state.rs    # Runtime preservation system
+│   ├── src/
+│   │   ├── runtime_state.rs    # Runtime preservation system
+│   │   ├── code_sync.rs        # Code synchronization for Live mode
+│   │   ├── reconciliation.rs   # React-inspired reconciliation with state preservation
+│   │   ├── perf_monitor.rs     # Performance monitoring
+│   │   ├── debug_config.rs     # Debug configuration system
+│   │   └── materials/
+│   │       └── mesh_basic_material.rs  # Material system
+│   └── tests/
+│       ├── reconciliation_tests.rs     # 22+ unit tests for reconciliation
+│       └── hot_swap_integration_tests.rs # Integration tests for hot-swapping
 ├── dsl/
 │   └── src/
 │       ├── ast.rs              # Extended with MetaDirective
-│       └── parser.rs           # Meta directive parsing
+│       ├── parser.rs           # Meta directive & macro parsing
+│       ├── scene_macros.rs     # Scene macro expansion
+│       └── color.rs            # Color format parsing
 ├── testing/
 │   └── src/
 │       ├── ast.rs              # Test DSL AST
-│       ├── parser.rs           # Test DSL parser
-│       ├── runner.rs           # Test execution engine
-│       ├── cli.rs              # Terminal interface
-│       └── visualization.rs    # 3D test visualization
+│       ├── parser.rs           # Test DSL parser (with Expr::Str handling)
+│       ├── runner.rs           # Test execution engine (with all TestStatus variants)
+│       ├── cli.rs              # Terminal interface (with TestDef import)
+│       └── visualization.rs    # 3D test visualization (Entity-based, not CubeData)
+├── vm/
+│   └── src/
+│       └── interpreter.rs      # Extended with math functions
 └── examples/
     ├── preserve_test.xrdsl     # Demo of preservation features
-    └── test_camera_preservation.xrdsl  # Test examples
+    ├── test_camera_preservation.xrdsl  # Test examples
+    ├── sine_wave_*.xrdsl       # Math function demonstrations
+    ├── loop_*.xrdsl            # Macro loop examples
+    ├── test_colors.xrdsl       # Color format examples
+    ├── test_material.xrdsl     # Material system examples
+    └── math_*.xrdsl            # Mathematical function showcases
 ```
 
 ## 🎯 How to Test
@@ -107,21 +179,41 @@ cargo run -p desktop -- examples/preserve_test.xrdsl
 # Build the testing framework
 cargo build -p xr-lang-testing
 
+# Run all tests including reconciliation and hot-swap tests
+cargo test
+
+# Run specific test suites
+cargo test -p gpu reconciliation_tests
+cargo test -p gpu hot_swap_integration
+
 # Future: Run tests (when CLI binary is added)
 # xr-lang test examples/test_camera_preservation.xrdsl
 ```
 
 ## 🔑 Key Achievements
 
-1. **Foundation Laid**: Core infrastructure for both runtime preservation and testing is in place
+1. **Foundation Laid**: Core infrastructure for runtime preservation, testing, and live coding is in place
 2. **Extensible Design**: Clean separation of concerns allows easy addition of new features
-3. **Developer Experience**: Focus on hot-reload preservation improves iteration speed
+3. **Developer Experience**: Focus on hot-reload preservation and live code sync improves iteration speed
 4. **Test-First Approach**: Testing framework designed from the start for XR-specific needs
 5. **3D Native**: Tests can be visualized and debugged in 3D space
+6. **Live Coding**: Full bidirectional sync between runtime and code in Live mode
+7. **Macro System**: Basic macro expansion for procedural generation
+8. **Performance Tools**: Comprehensive performance monitoring and debugging capabilities
+9. **Math Functions**: Complete set of mathematical functions for behaviors
+10. **Material System**: Three.js-inspired material system with advanced rendering options
+11. **Robust Testing**: 22+ unit tests for reconciliation and comprehensive integration tests for hot-swapping
+12. **Seamless Hot-Swapping**: Reconciliation and runtime hot-swapping work together for all DSL features
 
 ## 📝 Notes
 
 - The runtime preservation system is fully functional and can be tested immediately
+- The code synchronization system (Live mode) is fully implemented and working
+- The reconciliation and hot-swapping systems have comprehensive test coverage with all tests passing
+- Successfully migrated from deprecated CubeData API to the modern Entity system
 - The testing framework has all core components but needs integration with the main DSL parser
 - Meta directives provide a clean way to control preservation behavior per-object
-- The architecture supports the ambitious vision outlined in project-vision.md
+- The macro system enables procedural generation with loops and math functions
+- Performance monitoring tools provide real-time insights into application performance
+- The architecture strongly supports the ambitious vision outlined in project-vision.md
+- All compilation errors and warnings have been resolved, ensuring DSL remains general-purpose

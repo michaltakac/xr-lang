@@ -1,7 +1,10 @@
 //! 3D visualization for test execution and results
 
 use crate::runner::*;
-use gpu::{Vec3, Vec2, Vec4, SceneData, CubeData, UIElementData};
+use gpu::{Vec3, SceneData, UIElementData};
+use gpu::entity::{Entity, MeshSource, PrimitiveType, Transform};
+use gpu::scene::CameraData;
+use gpu::math::Quat;
 
 pub struct TestVisualization {
     pub test_cubes: Vec<TestCube>,
@@ -38,7 +41,7 @@ pub struct TimelineScrubber {
 #[derive(Debug, Clone)]
 pub struct StatusPanel {
     pub position: Vec3,
-    pub size: Vec2,
+    pub size: [f32; 2],
     pub tests_run: usize,
     pub tests_passed: usize,
     pub tests_failed: usize,
@@ -50,14 +53,14 @@ impl TestVisualization {
             test_cubes: Vec::new(),
             assertion_markers: Vec::new(),
             timeline_scrubber: TimelineScrubber {
-                position: Vec3::new(0.0, -2.0, 0.0),
+                position: Vec3::new(0.0, -5.0, 0.0),
                 width: 10.0,
                 current_time: 0.0,
                 total_time: 100.0,
             },
             status_panel: StatusPanel {
                 position: Vec3::new(5.0, 3.0, 0.0),
-                size: Vec2::new(3.0, 2.0),
+                size: [3.0, 2.0],
                 tests_run: 0,
                 tests_passed: 0,
                 tests_failed: 0,
@@ -66,26 +69,24 @@ impl TestVisualization {
     }
     
     pub fn update_from_results(&mut self, results: &[TestResult]) {
+        // Create test cubes in a grid
+        let grid_size = (results.len() as f32).sqrt().ceil() as usize;
+        
         self.test_cubes.clear();
         self.assertion_markers.clear();
         
-        // Create a cube for each test
-        let spacing = 2.0;
-        let row_size = 5;
-        
         for (i, result) in results.iter().enumerate() {
-            let row = i / row_size;
-            let col = i % row_size;
-            
-            let x = col as f32 * spacing - (row_size as f32 * spacing / 2.0);
-            let z = row as f32 * spacing;
+            let x = (i % grid_size) as f32 * 2.0 - grid_size as f32;
+            let z = (i / grid_size) as f32 * 2.0 - grid_size as f32;
             
             let color = match result.status {
-                TestStatus::Passed => Vec3::new(0.0, 1.0, 0.0),   // Green
-                TestStatus::Failed => Vec3::new(1.0, 0.0, 0.0),   // Red
-                TestStatus::Skipped => Vec3::new(1.0, 1.0, 0.0),  // Yellow
-                TestStatus::Timeout => Vec3::new(1.0, 0.5, 0.0),  // Orange
-                TestStatus::Error => Vec3::new(0.5, 0.0, 0.5),    // Purple
+                TestStatus::Pending => Vec3::new(0.5, 0.5, 0.5),
+                TestStatus::Running => Vec3::new(1.0, 1.0, 0.0),
+                TestStatus::Passed => Vec3::new(0.0, 1.0, 0.0),
+                TestStatus::Failed => Vec3::new(1.0, 0.0, 0.0),
+                TestStatus::Skipped => Vec3::new(0.3, 0.3, 0.3),
+                TestStatus::Timeout => Vec3::new(1.0, 0.5, 0.0),
+                TestStatus::Error => Vec3::new(0.8, 0.0, 0.8),
             };
             
             self.test_cubes.push(TestCube {
@@ -93,7 +94,7 @@ impl TestVisualization {
                 position: Vec3::new(x, 0.0, z),
                 color,
                 status: result.status.clone(),
-                scale: Vec3::ONE,
+                scale: Vec3::new(1.0, 1.0, 1.0),
             });
             
             // Add assertion markers
@@ -118,97 +119,152 @@ impl TestVisualization {
     }
     
     pub fn to_scene_data(&self) -> SceneData {
-        let mut cubes = Vec::new();
-        let mut ui_elements = Vec::new();
+        let mut entities = Vec::new();
         
-        // Add test cubes
+        // Convert test cubes to entities
         for test_cube in &self.test_cubes {
-            cubes.push(CubeData {
+            let color = match test_cube.status {
+                TestStatus::Pending => [0.5, 0.5, 0.5, 1.0],
+                TestStatus::Running => [1.0, 1.0, 0.0, 1.0],
+                TestStatus::Passed => [0.0, 1.0, 0.0, 1.0],
+                TestStatus::Failed => [1.0, 0.0, 0.0, 1.0],
+                TestStatus::Skipped => [0.3, 0.3, 0.3, 1.0],
+                TestStatus::Timeout => [1.0, 0.5, 0.0, 1.0],
+                TestStatus::Error => [0.8, 0.0, 0.8, 1.0],
+            };
+            
+            entities.push(Entity {
+                id: format!("test_{}", test_cube.name),
                 name: test_cube.name.clone(),
-                position: test_cube.position,
-                scale: test_cube.scale,
-                rotation: gpu::Quat::IDENTITY,
-                color: test_cube.color,
+                mesh: MeshSource::Primitive(PrimitiveType::cube()),
+                transform: Transform {
+                    position: test_cube.position,
+                    rotation: Quat::IDENTITY,
+                    scale: test_cube.scale,
+                },
+                material: Some(dsl::ast::MaterialDef::MeshBasic {
+                    color,
+                    opacity: 1.0,
+                    transparent: false,
+                    side: "front".to_string(),
+                    wireframe: false,
+                }),
                 behavior: None,
-                interactive: true,
-                id: Some(format!("test_{}", test_cube.name)),
+                children: vec![],
+                parent: None,
+                components: vec![],
                 meta: None,
             });
         }
         
-        // Add assertion markers as small cubes
+        // Add assertion markers as small spheres
         for marker in &self.assertion_markers {
             let color = if marker.passed {
-                Vec3::new(0.0, 1.0, 0.0)  // Green
+                [0.0, 1.0, 0.0, 1.0]  // Green
             } else {
-                Vec3::new(1.0, 0.0, 0.0)  // Red
+                [1.0, 0.0, 0.0, 1.0]  // Red
             };
             
-            cubes.push(CubeData {
+            entities.push(Entity {
+                id: format!("assertion_{}", marker.assertion),
                 name: format!("assertion_{}", marker.assertion),
-                position: marker.position,
-                scale: Vec3::new(0.2, 0.2, 0.2),
-                rotation: gpu::Quat::IDENTITY,
-                color,
+                mesh: MeshSource::Primitive(PrimitiveType::sphere()),
+                transform: Transform {
+                    position: marker.position,
+                    rotation: Quat::IDENTITY,
+                    scale: Vec3::new(0.2, 0.2, 0.2),
+                },
+                material: Some(dsl::ast::MaterialDef::MeshBasic {
+                    color,
+                    opacity: 1.0,
+                    transparent: false,
+                    side: "front".to_string(),
+                    wireframe: false,
+                }),
                 behavior: None,
-                interactive: false,
-                id: Some(format!("assertion_{}", marker.assertion)),
+                children: vec![],
+                parent: None,
+                components: vec![],
                 meta: None,
             });
         }
         
         // Add timeline scrubber as a plane
-        cubes.push(CubeData {
+        entities.push(Entity {
+            id: "timeline_scrubber".to_string(),
             name: "timeline_scrubber".to_string(),
-            position: self.timeline_scrubber.position,
-            scale: Vec3::new(self.timeline_scrubber.width, 0.1, 1.0),
-            rotation: gpu::Quat::IDENTITY,
-            color: Vec3::new(0.5, 0.5, 0.5),
+            mesh: MeshSource::Primitive(PrimitiveType::Plane { width: 10.0, height: 10.0, subdivisions: 1 }),
+            transform: Transform {
+                position: self.timeline_scrubber.position,
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(self.timeline_scrubber.width, 0.1, 1.0),
+            },
+            material: Some(dsl::ast::MaterialDef::MeshBasic {
+                color: [0.5, 0.5, 0.5, 1.0],
+                opacity: 1.0,
+                transparent: false,
+                side: "double".to_string(),
+                wireframe: false,
+            }),
             behavior: None,
-            interactive: true,
-            id: Some("timeline_scrubber".to_string()),
+            children: vec![],
+            parent: None,
+            components: vec![],
             meta: None,
         });
         
         // Add timeline progress
         let progress = self.timeline_scrubber.current_time / self.timeline_scrubber.total_time;
-        cubes.push(CubeData {
+        entities.push(Entity {
+            id: "timeline_progress".to_string(),
             name: "timeline_progress".to_string(),
-            position: self.timeline_scrubber.position + Vec3::new(
-                -self.timeline_scrubber.width / 2.0 + progress * self.timeline_scrubber.width / 2.0,
-                0.1,
-                0.0
-            ),
-            scale: Vec3::new(progress * self.timeline_scrubber.width, 0.15, 0.8),
-            rotation: gpu::Quat::IDENTITY,
-            color: Vec3::new(0.0, 0.5, 1.0),
+            mesh: MeshSource::Primitive(PrimitiveType::Plane { width: 10.0, height: 10.0, subdivisions: 1 }),
+            transform: Transform {
+                position: self.timeline_scrubber.position + Vec3::new(
+                    -self.timeline_scrubber.width / 2.0 + progress * self.timeline_scrubber.width / 2.0,
+                    0.1,
+                    0.0
+                ),
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(progress * self.timeline_scrubber.width, 0.15, 0.8),
+            },
+            material: Some(dsl::ast::MaterialDef::MeshBasic {
+                color: [0.0, 0.5, 1.0, 1.0],
+                opacity: 1.0,
+                transparent: false,
+                side: "double".to_string(),
+                wireframe: false,
+            }),
             behavior: None,
-            interactive: false,
-            id: Some("timeline_progress".to_string()),
+            children: vec![],
+            parent: None,
+            components: vec![],
             meta: None,
         });
         
-        // Add status panel UI
-        ui_elements.push(UIElementData {
-            name: "status_panel".to_string(),
-            ui_type: "panel".to_string(),
-            position: self.status_panel.position,
-            size: [self.status_panel.size.x, self.status_panel.size.y],
-            text: Some(format!(
-                "Tests: {}\nPassed: {} ✓\nFailed: {} ✗",
-                self.status_panel.tests_run,
-                self.status_panel.tests_passed,
-                self.status_panel.tests_failed
-            )),
-            color: [0.2, 0.2, 0.2, 0.8],
-            behavior: None,
-        });
+        // Create UI elements for status panel
+        let ui_elements = vec![
+            UIElementData {
+                name: "status_panel".to_string(),
+                ui_type: "panel".to_string(),
+                position: self.status_panel.position,
+                size: self.status_panel.size,
+                text: Some(format!(
+                    "Tests: {}\nPassed: {} ✓\nFailed: {} ✗",
+                    self.status_panel.tests_run,
+                    self.status_panel.tests_passed,
+                    self.status_panel.tests_failed
+                )),
+                color: [0.2, 0.2, 0.2, 0.8],
+                behavior: None,
+            }
+        ];
         
         SceneData {
-            cubes,
+            entities,
             ui_elements,
             behaviors: std::collections::HashMap::new(),
-            camera: Some(gpu::CameraData {
+            camera: Some(CameraData {
                 position: Vec3::new(0.0, 10.0, 15.0),
                 target: Vec3::new(0.0, 0.0, 0.0),
                 fov: 60.0_f32.to_radians(),
@@ -216,45 +272,12 @@ impl TestVisualization {
             }),
             lighting: None,
             input: None,
+            ast: vec![],
         }
     }
     
-    pub fn handle_interaction(&mut self, object_name: &str, interaction_type: &str) {
-        if object_name.starts_with("test_") {
-            // Handle test cube interaction
-            if interaction_type == "click" {
-                println!("Test cube clicked: {}", object_name);
-                // Could show test details, re-run test, etc.
-            }
-        } else if object_name == "timeline_scrubber" && interaction_type == "drag" {
-            // Handle timeline scrubbing
-            println!("Timeline scrubbing...");
-            // Could seek to specific point in test execution
-        }
-    }
-    
-    pub fn animate(&mut self, dt: f32) {
-        // Animate test cubes
-        for cube in &mut self.test_cubes {
-            match cube.status {
-                TestStatus::Passed => {
-                    // Gentle pulse for passed tests
-                    let pulse = (self.timeline_scrubber.current_time * 2.0).sin() * 0.1 + 1.0;
-                    cube.scale = Vec3::new(pulse, pulse, pulse);
-                }
-                TestStatus::Failed => {
-                    // Shake failed tests
-                    let shake = (self.timeline_scrubber.current_time * 10.0).sin() * 0.05;
-                    cube.position.x += shake;
-                }
-                _ => {}
-            }
-        }
-        
-        // Update timeline
-        self.timeline_scrubber.current_time += dt;
-        if self.timeline_scrubber.current_time > self.timeline_scrubber.total_time {
-            self.timeline_scrubber.current_time = 0.0;
-        }
+    pub fn update_timeline(&mut self, elapsed: f32) {
+        self.timeline_scrubber.current_time = 
+            (self.timeline_scrubber.current_time + elapsed) % self.timeline_scrubber.total_time;
     }
 }

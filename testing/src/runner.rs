@@ -41,6 +41,8 @@ pub struct TestResult {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TestStatus {
+    Pending,
+    Running,
     Passed,
     Failed,
     Skipped,
@@ -180,6 +182,8 @@ impl TestRunner {
         
         // Print result
         let status_str = match status {
+            TestStatus::Pending => "○".white(),
+            TestStatus::Running => "●".cyan(),
             TestStatus::Passed => "✓".green(),
             TestStatus::Failed => "✗".red(),
             TestStatus::Skipped => "⊘".yellow(),
@@ -224,7 +228,7 @@ impl TestRunner {
                 self.state.scene_data = Some(gpu::SceneData::default());
             }
             "load-scene" => {
-                if let Some(TestValue::String(file)) = step.params.get("file") {
+                if let Some(TestValue::String(_file)) = step.params.get("file") {
                     // Load scene from file
                     // TODO: Implement scene loading
                 }
@@ -236,9 +240,9 @@ impl TestRunner {
     
     async fn execute_action(&mut self, action: &TestAction) -> Result<()> {
         match action {
-            TestAction::CreateObject { name, object_type, properties } => {
+            TestAction::CreateObject { name: _name, object_type: _object_type, properties: _properties } => {
                 // Create object in scene
-                if let Some(ref mut scene) = self.state.scene_data {
+                if let Some(ref mut _scene) = self.state.scene_data {
                     // TODO: Add object to scene
                 }
             }

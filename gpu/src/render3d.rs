@@ -426,7 +426,7 @@ impl Renderer3D {
                     println!("  ~ Modifying entity: {}", id);
                     
                     // Find the mesh index for this entity
-                    if let Some((mesh_idx, entity)) = self.scene_data.entities.iter().enumerate()
+                    if let Some((mesh_idx, _entity)) = self.scene_data.entities.iter().enumerate()
                         .find(|(_, e)| e.id == *id) {
                         
                         if mesh_idx < self.meshes.len() {

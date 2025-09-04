@@ -153,12 +153,12 @@ impl Interpreter {
             let mut env = behavior.env.clone();
             
             // Debug: Check if speed is in environment
-            if let Some(Value::F32(speed)) = env.get("speed") {
+            if let Some(Value::F32(_speed)) = env.get("speed") {
                 // println!(DEBUG: Using speed = {} for behavior '{}'", speed, name);
             }
             
             // Debug: Check if rotation.y is already in persistent env
-            if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
+            if let Some(Value::F32(_rot_y)) = env.get("rotation.y") {
                 // println!(DEBUG: rotation.y from persistent env = {}", rot_y);
             }
             
@@ -172,14 +172,14 @@ impl Interpreter {
                 env.set(key.clone(), value.clone());
                 // Debug: Log state values being used
                 if key == "speed" {
-                    if let Value::F32(speed) = value {
+                    if let Value::F32(_speed) = value {
                         // println!(DEBUG: Using speed = {} for behavior '{}'", speed, name);
                     }
                 }
             }
             
             // Debug: Check rotation.y before execution
-            if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
+            if let Some(Value::F32(_rot_y)) = env.get("rotation.y") {
                 // println!(DEBUG: rotation.y before = {}", rot_y);
             }
             
@@ -191,7 +191,7 @@ impl Interpreter {
             let _result = match &update_fn.body {
                 dsl::ast::Expr::List(exprs) if !exprs.is_empty() => {
                     // Check if this is a function call or a sequence of statements
-                    if let dsl::ast::Expr::Sym(s) = &exprs[0] {
+                    if let dsl::ast::Expr::Sym(_s) = &exprs[0] {
                         // It's a function call
                         self.eval(&update_fn.body, &mut env)?
                     } else {
@@ -207,12 +207,12 @@ impl Interpreter {
             };
             
             // Debug: Check what rotation.y value we have after execution
-            if let Some(Value::F32(rot_y)) = env.get("rotation.y") {
+            if let Some(Value::F32(_rot_y)) = env.get("rotation.y") {
                 // println!(DEBUG: rotation.y after = {}", rot_y);
             }
             
             // Debug: Check speed value in env after execution
-            if let Some(Value::F32(speed)) = env.get("speed") {
+            if let Some(Value::F32(_speed)) = env.get("speed") {
                 // println!(DEBUG: speed in env after execution = {}", speed);
             }
             
@@ -737,8 +737,8 @@ impl Interpreter {
             
             "scale" => {
                 if args.len() == 1 {
-                    let s = self.eval_to_f32(&args[0], env)?;
-                    Ok(Value::Vec3(s, s, s))
+                    let scale_val = self.eval_to_f32(&args[0], env)?;
+                    Ok(Value::Vec3(scale_val, scale_val, scale_val))
                 } else if args.len() == 3 {
                     let x = self.eval_to_f32(&args[0], env)?;
                     let y = self.eval_to_f32(&args[1], env)?;

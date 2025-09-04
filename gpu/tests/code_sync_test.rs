@@ -3,7 +3,6 @@ use gpu::code_sync::CodeSync;
 use gpu::runtime_state::{RuntimeState, AuthoringMode, CameraState};
 use gpu::math::Vec3;
 use std::fs;
-use std::path::Path;
 
 #[test]
 fn test_code_sync_modes() -> anyhow::Result<()> {

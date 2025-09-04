@@ -269,7 +269,7 @@ impl PerfMonitor {
     }
     
     /// Render the performance monitor overlay
-    pub fn render(&self, encoder: &mut CommandEncoder, view: &TextureView, queue: &Queue) {
+    pub fn render(&self, encoder: &mut CommandEncoder, view: &TextureView, _queue: &Queue) {
         if !self.enabled {
             return;
         }
@@ -279,10 +279,10 @@ impl PerfMonitor {
         let Some(bind_group) = &self.bind_group else { return };
         
         // Create text for display
-        let fps_text = format!("FPS: {:.0}", self.current_fps);
-        let frame_time_text = format!("Frame: {:.2}ms", self.avg_frame_time_ms);
-        let draw_calls_text = format!("Draws: {}", self.draw_calls);
-        let triangles_text = format!("Tris: {:.1}k", self.triangles_rendered as f32 / 1000.0);
+        let _fps_text = format!("FPS: {:.0}", self.current_fps);
+        let _frame_time_text = format!("Frame: {:.2}ms", self.avg_frame_time_ms);
+        let _draw_calls_text = format!("Draws: {}", self.draw_calls);
+        let _triangles_text = format!("Tris: {:.1}k", self.triangles_rendered as f32 / 1000.0);
         
         // Render pass for overlay
         let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
