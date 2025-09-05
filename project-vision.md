@@ -175,22 +175,46 @@ impl Journal {
 }
 ```
 
-#### 5. Scene Primitives as Intrinsics
+#### 5. Scene Primitives and 3D Model Loading
 
-Following the principle of **"implement the minimal low-level substrate in Rust"**, scene manipulation primitives are exposed as intrinsic functions. This allows XR-Lang to orchestrate 3D scenes while leaving performance-critical operations (matrix math, GPU interfacing) in native code - similar to how Lisp systems use foreign functions for heavy computation:
+Following the principle of **"implement the minimal low-level substrate in Rust"**, scene manipulation primitives and 3D model loading are exposed through a well-defined API bridge. This **library/engine approach** keeps the language core focused while delegating domain-specific capabilities like model parsing and rendering to pluggable components - similar to how Unity uses C# with its engine handling model import/serialization, or how WebXR/A-Frame uses JavaScript with three.js doing the actual model loading.
+
+**Key Design Principles for 3D Model Support:**
+
+- **Separation of Concerns**: Model loading functionality lives in the runtime library/engine rather than the language parser or core VM
+- **Standard Format Support**: Primary support for **glTF 2.0** ("the JPEG of 3D") - optimized for runtime loading with efficient binary format (.glb), rich features (PBR materials, skeletal animations, morph targets)
+- **Live Hot-Swappable Models**: Enable editing and swapping 3D assets during runtime without restarting the environment
+- **Animation Primitives**: Expose embedded animations (skeletal, morph targets) as first-class entities that can be played, paused, sought, or blended
 
 ```rust
 // Expose to XR-Lang as built-in functions
 fn intrinsic_create_camera(pos: Vec3) -> Camera { ... }
 fn intrinsic_create_cube(pos: Vec3) -> Entity { ... }
 fn intrinsic_update_transform(id: EntityId, transform: Transform) { ... }
+
+// 3D Model loading via engine bridge
+fn intrinsic_load_model(path: &str) -> Result<Model> { 
+    // Delegates to engine's glTF loader
+    // Returns live object handle
+}
+fn intrinsic_update_model(id: ModelId, path: &str) -> Result<()> {
+    // Hot-swap model at runtime
+}
+fn intrinsic_play_animation(model: ModelId, name: &str) { ... }
 ```
+
+This approach provides several advantages:
+- **Maintainability**: Updates to support new model formats happen in the engine without altering language semantics
+- **Flexibility**: Users could swap out the 3D engine while keeping the language interface stable
+- **Focus on Language Features**: Core language development (type system, concurrency) remains unentangled with heavy 3D logic
 
 ### Success Criteria
 - [ ] Can parse and execute simple S-expressions
 - [ ] Can create/modify 3D scene via DSL
+- [ ] Can load and display glTF/GLB models
+- [ ] Hot-reload for both code and 3D assets
 - [ ] Can save/restore state via journals
-- [ ] Basic hot-reload working
+- [ ] Model introspection and animation control working
 
 ## Stage B: Homoiconic Core
 
@@ -749,7 +773,15 @@ Following the principle to **"implement the minimal low-level substrate in Rust 
     (transform :position [0 0 0])
     (mesh-component :type :cube)
     (material-component :color [1 0 0])
-    (behavior rotate-on-click)))
+    (behavior rotate-on-click))
+  
+  ; Loading 3D models as first-class entities
+  (entity character
+    (model :path "assets/character.glb"
+             :hot-reload true)
+    (transform :position [5 0 5])
+    (animation :clip "idle" :loop true)
+    (behavior interactive-character)))
 
 ; Behaviors as systems
 (defsystem rotate-on-click
@@ -757,6 +789,51 @@ Following the principle to **"implement the minimal low-level substrate in Rust 
   :on-click (fn [entity]
     (update-component entity :transform
       (fn [t] (rotate t :y 45)))))
+
+; Model hot-swapping and animation control
+(defsystem interactive-character
+  :components [model animation]
+  :on-proximity (fn [entity distance]
+    (if (< distance 2.0)
+      (play-animation entity "wave")
+      (play-animation entity "idle")))
+  :on-edit (fn [entity new-model-path]
+    ; Hot-swap model without restart
+    (reload-model! entity new-model-path)))
+```
+
+### 3D Model Loading Architecture
+
+The 3D model loading system follows a **bridge pattern** that decouples the language from specific 3D APIs:
+
+```lisp
+; High-level XR-Lang API for models
+(defprotocol ModelLoader
+  (load-model [path options])
+  (reload-model [model path])
+  (get-animations [model])
+  (get-nodes [model])
+  (find-node [model name]))
+
+; Implementation delegates to engine
+(defn load-gltf [path & {:keys [hot-reload auto-play]}]
+  (let [model (engine/load-model path)
+        animations (engine/get-animations model)]
+    {:model model
+     :animations animations
+     :nodes (build-node-map model)
+     :hot-reload hot-reload
+     :watcher (when hot-reload
+                (watch-file path #(reload-model model %)))}))
+
+; Live introspection and manipulation
+(defn inspect-model [model]
+  (spawn-inspector
+    {:nodes (get-all-nodes model)
+     :materials (get-materials model)
+     :animations (get-animation-clips model)
+     :stats {:vertices (count-vertices model)
+             :triangles (count-triangles model)}}))
 ```
 
 ## Code Examples & Patterns
@@ -909,6 +986,117 @@ A key insight is how **"XR-Lang might script the AI interactions using XR-Lang p
 (apply-pattern place-and-spin my-cube [10 0 10] 2.0)
 ```
 
+### Example 6: Hot-Swappable 3D Models with Live Editing
+
+Demonstrating the **liveness principle** applied to 3D assets - models can be edited externally and changes reflect immediately without restarting:
+
+```lisp
+(defscene3d live-modeling-workspace
+  ; Load model with hot-reload enabled
+  (entity robot
+    (model :path "assets/robot.glb"
+           :hot-reload true
+           :watch-interval 500)  ; Check for changes every 500ms
+    (transform :position [0 0 0])
+    (meta :preserve-state true))  ; Preserve position/rotation on reload
+  
+  ; Interactive model swapping
+  (entity model-gallery
+    (layout :grid [3 3])
+    (for [model-path (list-models "assets/characters/")]
+      (preview-model model-path
+        :on-select (fn [path]
+          ; Instantly swap the main model
+          (swap-model! robot path)))))
+  
+  ; Animation blending and control
+  (behavior animation-controller
+    :target robot
+    :on-update (fn [entity dt]
+      (let [current-anim (get-current-animation entity)
+            target-anim (determine-animation-state entity)]
+        (when (not= current-anim target-anim)
+          ; Smooth transition between animations
+          (blend-to-animation entity target-anim 
+                            :duration 0.3
+                            :curve :ease-in-out))))))
+
+; File watcher for external edits
+(defwatcher model-updater
+  :watch-paths ["assets/*.glb" "assets/*.gltf"]
+  :on-change (fn [path event]
+    (case event
+      :modified (reload-all-using path)
+      :created (add-to-asset-browser path)
+      :deleted (remove-from-scene path)))
+  :debounce 100)  ; Avoid multiple reloads
+
+; Live material editing
+(defn edit-model-material [model material-name new-properties]
+  (let [material (find-material model material-name)]
+    ; Changes apply immediately to rendered model
+    (update-material! material new-properties)
+    ; Optionally save back to file
+    (when (:save-to-disk new-properties)
+      (export-material-changes model))))
+```
+
+### Example 7: Model Introspection and Manipulation
+
+Showing how the language provides **deep access to model internals** for fine-grained control:
+
+```lisp
+(defn explore-model [model-path]
+  (let [model (load-model model-path)]
+    ; Access model hierarchy
+    (println "Model structure:")
+    (walk-nodes model 
+      (fn [node depth]
+        (println (str (repeat "  " depth) 
+                     (:name node) 
+                     " [" (:type node) "]"))))
+    
+    ; List all animations with metadata
+    (println "\nAnimations:")
+    (for [anim (get-animations model)]
+      (println (format "  %s: %.2fs, %d keyframes"
+                      (:name anim)
+                      (:duration anim)
+                      (:keyframe-count anim))))
+    
+    ; Find and modify specific parts
+    (when-let [wheel (find-node model "front_wheel")]
+      (add-behavior wheel
+        (spin :axis :x :rate 2.0)))
+    
+    ; Access and modify materials
+    (for [material (get-materials model)]
+      (when (= (:type material) :pbr)
+        (update-material! material
+          {:metallic 0.8
+           :roughness 0.2})))
+    
+    model))
+
+; Advanced: Procedural animation from model data
+(defn create-procedural-animation [model animation-name]
+  (let [bones (get-bones model)
+        ; Extract animation primitives
+        base-animation (get-animation model animation-name)
+        keyframes (extract-keyframes base-animation)]
+    
+    ; Generate variations programmatically
+    (for [variation-id (range 5)]
+      (let [modified-keyframes 
+            (map (fn [kf]
+                   (update kf :rotation
+                           #(add-noise % (* variation-id 0.1))))
+                 keyframes)]
+        (create-animation! model
+          (str animation-name "-var-" variation-id)
+          modified-keyframes)))))
+```
+
 ## Minimal Viable Product (MVP)
 
 From lang-design-review.md, the 8 features that prove the thesis:
@@ -1024,8 +1212,9 @@ xr-lang/
 │       └── evolution.xrl    # Genetic programming
 │
 ├── assets/
-│   ├── models/              # 3D models (glTF, USD, etc)
-│   └── shaders/             # WGSL shaders
+│   ├── models/              # 3D models (primarily glTF/GLB, with conversion pipeline for OBJ/FBX/USD)
+│   ├── shaders/             # WGSL shaders
+│   └── animations/          # Reusable animation clips
 │
 └── examples/
     ├── basic/               # Simple examples
