@@ -12,9 +12,9 @@ crate-type = ["cdylib"]
 anyhow.workspace = true
 thiserror.workspace = true
 ndk.workspace = true
-ndk-glue.workspace = true
 openxr.workspace = true
 wgpu = { workspace = true }
+winit = { workspace = true, features = ["android-native-activity"] }
 bytemuck.workspace = true
 log.workspace = true
 android_logger = "0.13"

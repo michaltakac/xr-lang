@@ -1,0 +1,5 @@
+[target.aarch64-linux-android]
+linker = "/Users/michaltakac/Library/Android/sdk/ndk/29.0.14033849/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang"
+
+[env]
+ANDROID_NDK_HOME = "/Users/michaltakac/Library/Android/sdk/ndk/29.0.14033849"

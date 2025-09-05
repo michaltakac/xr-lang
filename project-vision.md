@@ -1,1434 +1,1158 @@
-# XR-Lang Metaprogramming Vision: AI-Augmented Self-Evolving Meta-System
+# XR-Lang: A Meta-Medium for Living Programming in XR
 
-## Core Problem: Hot-Reload vs Runtime State
+## Executive Summary
 
-When hot-reloading resets everything to the DSL-defined state, it creates a jarring experience where carefully positioned cameras, adjusted objects, or runtime discoveries are lost. This conflicts with the exploratory nature of 3D environment development.
+XR-Lang synthesizes **Lisp's homoiconicity**, **Smalltalk's live objects**, and **modern AI capabilities** to create what Alan Kay envisioned: a **meta-medium** for extended reality and 3D that can dynamically become any other medium. This document outlines the concrete path from vision to reality.
 
-## The Vision: Living, Learning, Conversational Creative Partner
+> "The best way to predict the future is to invent it." — Alan Kay
 
-Combining homoiconic DSL, metaprogramming, and AI to create what Alan Kay envisioned: a **meta-medium** that can dynamically become any other medium, where the boundary between thinking and doing, between idea and implementation, becomes fluid and natural.
+*The Smalltalk-80 environment: Everything is an object, everything is live*
 
-### Theoretical Foundation
+## Table of Contents
 
-This vision builds on Alan Kay's groundbreaking work at Xerox PARC where he recognized that computers could become a "metamedium"—that it could incorporate all other media. As described in his seminal paper "Personal Dynamic Media" (1977), Kay crystallized his dreams into a design idea for a personal dynamic medium the size of a notebook (the Dynabook) which could be owned by everyone and could have the power to handle virtually all of its owner's information-related needs.
+1. [Core Architecture](#core-architecture)
+2. [Implementation Roadmap](#implementation-roadmap)
+3. [Stage A: Seed System](#stage-a-seed-system-weeks-1-4)
+4. [Stage B: Homoiconic Core](#stage-b-homoiconic-core-weeks-5-8)
+5. [Stage C: Live Tooling](#stage-c-live-tooling-weeks-9-12)
+6. [Stage D: Meta-Programming](#stage-d-meta-programming-weeks-13-16)
+7. [Stage E: AI Integration](#stage-e-ai-integration-weeks-17-20)
+8. [Technical Specifications](#technical-specifications)
+9. [Code Examples & Patterns](#code-examples--patterns)
+10. [Resources & Inspirations](#resources--inspirations)
 
-**Sources:**
-- Kay, Alan, and Adele Goldberg. "Personal Dynamic Media." *Computer* 10.3 (1977): 31-41.
-- Learning Research Group at Xerox PARC research on dynamic media communication and knowledge manipulation
-- Alan Kay's Turing Award recognition for fundamental contributions to personal computing and Smalltalk development
+## Core Architecture
 
-The homoiconic foundation draws from Lisp's revolutionary insight that "the primary representation of programs is also a data structure in a primitive type of the language itself" (Wikipedia, Homoiconicity). This property enables what makes metaprogramming in Lisp uniquely powerful: "code can be converted into data easily using QUOTE" and "a meta-circular evaluator allows you to use the host interpreter or compiler to evaluate LISP code at run-time, including run-time generated LISP code."
-
-**Sources:**
-- Wikipedia: Homoiconicity - https://en.wikipedia.org/wiki/Homoiconicity
-- Stack Overflow discussions on Lisp self-modification capabilities
-- Academic research on homoiconic language design principles
-
-## Three-Layer State System
-
-```
-┌─────────────────────────────────────┐
-│         Source DSL (.xrdsl)         │ <- Design-time state
-├─────────────────────────────────────┤
-│    Runtime Overrides (.runtime)     │ <- Session state  
-├─────────────────────────────────────┤
-│     Active State (in memory)        │ <- Current state
-└─────────────────────────────────────┘
-```
-
-## 1. Camera State Preservation & Meta-Behaviors
-
-### Meta-Behavior System in DSL
-
-The meta-behavior system implements what Bret Victor calls "Show the Data" - the fundamental principle that "the entire purpose of code is to manipulate data, and we never see the data. We write with blindfolds, and we read by playing pretend with data-phantoms in our imaginations." Our meta-behaviors make the invisible visible by preserving and visualizing runtime state changes.
-
-**Inspired by:**
-- Bret Victor's "Learnable Programming" essay emphasizing data visualization over static code
-- Smalltalk's live programming environment where "'live programming' is an essential part of those languages and which is enabled by reflection APIs"
-- Modern hot-reload systems as documented in the "awesome-live-reloading" GitHub collection
-
-**Sources:**
-- Victor, Bret. "Learnable Programming." https://worrydream.com/LearnableProgramming/
-- Live Programming History: https://liveprogramming.github.io/liveblog/2013/01/a-history-of-live-programming/
-- GitHub: hasura/awesome-live-reloading collection
-
-```lisp
-; Example DSL with meta-behaviors
-(defscene3d my-scene
-  (camera
-    (position 0 5 10)
-    (target 0 0 0)
-    (meta preserve-runtime))  ; Keep runtime changes
+```mermaid
+graph TB
+    subgraph "Rust Foundation (25-30%)"
+        VM[Bytecode VM]
+        MEM[Memory/GC]
+        FFI[FFI/Capabilities]
+        IO[I/O & XR Device Layer]
+        SCHED[Scheduler]
+    end
     
-  (object interactive-cube cube
-    (position 0 0 0)
-    (meta sync-to-code))  ; Write changes back to DSL
+    subgraph "XR-Lang Layer (70-75%)"
+        EVAL[Metacircular Evaluator]
+        MACRO[Macro System]
+        COMP[Compiler]
+        INSP[Inspector/Debugger]
+        DSL[Scene DSL]
+        AI[AI Integration]
+    end
     
-  (object reset-cube cube
-    (position 5 0 0)
-    (meta reset-on-reload))  ; Always reset (default)
+    subgraph "Three-Layer State"
+        SRC[Source DSL]
+        RT[Runtime Overrides]
+        ACT[Active State]
+    end
     
-  (ui-element status panel
-    (position 0 4 0)
-    (meta volatile))  ; Never persist
-)
+    VM --> EVAL
+    EVAL --> MACRO
+    MACRO --> DSL
+    DSL --> SRC
+    SRC --> RT
+    RT --> ACT
+    AI -.-> EVAL
+    AI -.-> DSL
+    INSP -.-> ACT
 ```
 
-### Runtime Override System
+### Key Design Principles
 
-This system addresses the fundamental tension between design-time definitions and runtime discoveries. As noted in hot-reloading research: "Hot reload systems represent a modern approach to runtime code modification" where "static languages have traditionally much less support for the runtime code reload. However, modern tooling is improving this."
+XR-Lang has been praised as **"the love child of a Lisp Machine and a Smalltalk environment, raised in VR"** - this architecture embodies that vision by combining:
+- **Lisp's homoiconicity and meta-programming** (code as data, macros, self-modification)
+- **Smalltalk's live objects and image-based development** (always alive, inspectable, modifiable)
+- **Modern AI capabilities** (conversational programming, pattern learning)
+- **XR-native interaction** (3D manipulation, spatial coding)
 
-The three-layer state system (Source DSL → Runtime Overrides → Active State) implements a form of controlled self-modification, avoiding the complexity of true self-modifying code while maintaining the benefits. As discussed in programming language research: "In high-level languages where you compile and execute code at run-time, it is not really self-modifying code, but dynamic class loading."
+Drawing from the lang-design-review.md recommendations:
 
-**Sources:**
-- Self-modifying code research: https://en.wikipedia.org/wiki/Self-modifying_code
-- Hot reloading systems analysis: https://robert.kra.hn/posts/hot-reloading-rust/
-- Live programming environment studies
+1. **Crisp Object Model First**: Define the value graph before syntax
+2. **Image + Journals**: Event-sourced persistence with time-travel
+3. **Hygienic Macros**: Pattern-matching with proper scoping
+4. **Capability-Based Security**: Explicit authority for all effects
+5. **Probes Over Printf**: Live data visualization built into the core
+
+## Implementation Roadmap
+
+### Phase Distribution (from lang-design-review.md)
+- **Phase 1 (MVP)**: ~45% Rust / 55% XR-Lang
+- **Phase 2 (Metacircular)**: ~30% Rust / 70% XR-Lang  
+- **Phase 3 (Mature)**: ~25% Rust / 75% XR-Lang
+
+## Stage A: Seed System (Weeks 1-4)
+
+### Concrete Tasks
+
+#### 1. Value Model Implementation (Rust)
+
+As experienced Lisp/Smalltalk developers emphasize, **"Keep the core language semantics as simple and regular as possible."** The value model represents the fundamental data types that XR-Lang can manipulate. Following the Lisp tradition of uniform data representation (everything is an S-expression), we start with a simple tagged union that can grow as needed:
 
 ```rust
-struct RuntimeOverrides {
-    camera_overrides: Option<CameraState>,
-    object_overrides: HashMap<String, Transform>,
-    preserve_flags: HashSet<String>,
+// From lang-implementation-research.md recommendation
+enum Value {
+    Int(i64),
+    Float(f64), 
+    Str(String),
+    Symbol(Symbol),
+    Vector(Vec<Value>),
+    Map(HashMap<String, Value>),
+    Object(ObjectId),
+    AST(Box<ASTNode>),  // Homoiconic foundation
 }
 
-impl SceneManager {
-    fn reload_scene(&mut self, new_dsl: SceneData) {
-        // Preserve marked runtime states
-        let preserved = self.extract_preserved_state();
-        
-        // Load new DSL
-        self.load_dsl(new_dsl);
-        
-        // Reapply preserved overrides
-        self.apply_overrides(preserved);
+struct RuntimeState {
+    image: Image,           // Persistent state
+    journal: Journal,       // Event log
+    active: ActiveState,    // Current runtime
+}
+```
+
+#### 2. Bytecode VM (Simple Stack-Based)
+
+The recommendation from language design experts is to start with **"a simple evaluator or interpreter in Rust for the AST"** that prioritizes clarity over optimization. This aligns with the Lisp tradition where early implementations had minimal cores in C. The bytecode VM provides a stable execution layer that XR-Lang can eventually compile itself to:
+
+```rust
+enum OpCode {
+    Push(Value),
+    Pop,
+    Call(Symbol),
+    Return,
+    Jump(usize),
+    JumpIf(usize),
+    // Minimal instruction set initially
+}
+
+impl VM {
+    fn execute(&mut self, bytecode: &[OpCode]) -> Result<Value> {
+        // 200-300 lines of simple interpreter
+        // Focus on correctness over performance
     }
 }
 ```
 
-### Selective Code Sync
+#### 3. S-Expression Parser
+
+Homoiconicity is the cornerstone of Lisp's power - **"code is represented as data structures that the language itself can manipulate."** By adopting S-expressions from day one, XR-Lang inherits this meta-programming capability. The EDN-like syntax provides richer literals than traditional Lisp while maintaining the essential property that code and data share the same representation:
+
+```lisp
+; Target syntax (EDN-like as recommended)
+(defscene3d demo
+  (camera 
+    (position 0 5 10)
+    (meta preserve-runtime))  ; Metadata support from day 1
+  (cube
+    (position 0 0 0)))
+```
+
+#### 4. Journal + Snapshot Store
+
+A critical lesson from Smalltalk's history is **"image drift" where the live image diverges from clean startup state**. XR-Lang's journal-based approach addresses this by maintaining an event-sourced history. This enables time-travel debugging (essential for understanding "what caused this state?") while preventing the system from becoming inconsistent:
 
 ```rust
-trait CodeSyncPolicy {
-    fn should_sync(&self) -> bool;
-    fn sync_interval(&self) -> Duration;
-    fn format_value(&self, value: impl Into<DslExpr>) -> String;
+struct Journal {
+    entries: Vec<JournalEntry>,
 }
 
-// Smart sync that detects user edits
-struct SmartSync {
-    last_manual_edit: Instant,
-    sync_buffer: Duration::from_secs(5), // Don't sync within 5s of manual edit
+enum JournalEntry {
+    StateChange { 
+        timestamp: u64,
+        path: ValuePath,
+        old: Value,
+        new: Value,
+    },
+    Checkpoint {
+        snapshot_id: SnapshotId,
+    },
+}
+
+// Enable time-travel from the start
+impl Journal {
+    fn replay_to(&self, timestamp: u64) -> State { ... }
+    fn branch_at(&self, timestamp: u64) -> Journal { ... }
 }
 ```
 
-### Mode-Based System
+#### 5. Scene Primitives as Intrinsics
+
+Following the principle of **"implement the minimal low-level substrate in Rust"**, scene manipulation primitives are exposed as intrinsic functions. This allows XR-Lang to orchestrate 3D scenes while leaving performance-critical operations (matrix math, GPU interfacing) in native code - similar to how Lisp systems use foreign functions for heavy computation:
 
 ```rust
-enum AuthoringMode {
-    Design,     // All changes reset on reload (current behavior)
-    Play,       // Runtime changes preserved, not saved
-    Live,       // Runtime changes sync to code
-    Replay,     // Playback recorded interactions
-}
+// Expose to XR-Lang as built-in functions
+fn intrinsic_create_camera(pos: Vec3) -> Camera { ... }
+fn intrinsic_create_cube(pos: Vec3) -> Entity { ... }
+fn intrinsic_update_transform(id: EntityId, transform: Transform) { ... }
 ```
 
-### DSL Extensions for Fine Control
+### Success Criteria
+- [ ] Can parse and execute simple S-expressions
+- [ ] Can create/modify 3D scene via DSL
+- [ ] Can save/restore state via journals
+- [ ] Basic hot-reload working
+
+## Stage B: Homoiconic Core
+
+### Concrete Tasks
+
+#### 6. Macro Expander in XR-Lang
+
+Language design experts note that **"XR-Lang's use of S-expression–like syntax and macro examples shows you're leveraging homoiconicity to allow code that writes code."** This is where XR-Lang begins eating its own dogfood - implementing its macro system in itself. Hygienic macros with gensym prevent variable capture, a crucial lesson learned from decades of Lisp development:
 
 ```lisp
-(defmeta camera-sync
-  (preserve position rotation)     ; Keep these on reload
-  (sync-on-stop)                  ; Write to code when stopping
-  (format "%.2f")                  ; Formatting for generated values
-  (throttle 1000))                ; Max sync rate (ms)
+; First macro written in XR-Lang itself
+(defmacro defscene3d [name & body]
+  `(do
+    (create-scene '~name)
+    ~@(map expand-scene-element body)))
 
-(defbehavior exploratory
-  (meta 
-    (mode live)                   ; Enable two-way sync
-    (target [position])            ; Only sync position
-    (trigger on-drag-end)          ; When to sync
-    (comment "/* auto */")))       ; Mark generated code
+; Hygienic macros with gensym
+(defmacro with-preserved-state [& body]
+  (let [state# (gensym "state")]
+    `(let [~state# (capture-state)]
+       (try
+         ~@body
+         (finally
+           (restore-state ~state#))))))
 ```
 
-### Conflict Resolution
+#### 7. Metacircular Evaluator
+
+This is the heart of Lisp's elegance - **"a function in XR-Lang that can interpret XR-Lang code, running on top of the base interpreter."** The metacircular evaluator proves the language is complete and self-describing. As language designers explain, "if you can implement many of its features in itself, the language is truly powerful." This milestone means XR-Lang understands itself:
 
 ```lisp
-; Generated section with timestamp
-(camera
-  (position 3.45 7.23 15.67)  ; /* auto: 2024-01-15 14:23:45 */
-  (target 0.00 0.00 0.00)     ; /* manual */
-  ...)
+; The evaluator evaluating itself - the Lisp tradition
+(defn eval [expr env]
+  (cond
+    (symbol? expr) (lookup expr env)
+    (number? expr) expr
+    (string? expr) expr
+    (vector? expr) (eval-vector expr env)
+    (list? expr) 
+    (case (first expr)
+      'quote (second expr)
+      'if (if (eval (second expr) env)
+            (eval (third expr) env)
+            (eval (fourth expr) env))
+      'lambda (make-closure (second expr) (cddr expr) env)
+      'defmacro (install-macro! (second expr) (third expr) (cdddr expr))
+      ; ... more special forms
+      (apply (eval (first expr) env)
+             (map #(eval % env) (rest expr))))))
 ```
 
-## 2. Self-Modifying Metaprogramming
+#### 8. Compiler to Bytecode
 
-This section implements true homoiconic metaprogramming where "homoiconic languages typically include full support of syntactic macros, allowing the programmer to express transformations of programs in a concise way." Unlike traditional self-modifying code that operates at the machine level, our approach uses Lisp's insight that "since Lisp data structures and Lisp code have the same syntactic structure, and since the 'eval' command allows data to be treated as code, and the 'quote' command allows code to be treated as data, Lisp has the potential to support self-rewriting programs."
-
-**Theoretical Foundation:**
-- Homoiconicity enables "metaprogramming easier than in a language without this property: reflection in the language depends on a single, homogeneous structure"
-- Lisp's quasiquote system: "all you need is quasiquotation for both constructing ASTs and for pattern-matching ASTs"
-- The distinction between code-as-data and true runtime modification
-
-**Sources:**
-- Wikipedia: Homoiconicity and Metaprogramming articles
-- Stack Overflow: "Programming language for self-modifying code?"
-- Academic research on macro systems and code generation
-
-### Macro System for Code Generation
-
-Our macro system implements what Paul Graham identified as Lisp's core advantage: "The advantage you get from having macros built into the language is that you don't have to write an external tool to support alternative syntax." This enables domain-specific languages embedded directly in the host language.
-
-The interactive code evolution macro demonstrates runtime code generation through user interaction, implementing what Victor calls "Dynamic behavior, not static structure" - we visualize and manipulate what the code is doing, not just its textual representation.
-
-**Inspired by:**
-- Lisp macro systems and their ability to generate code at compile-time
-- Genetic programming approaches to code evolution
-- Interactive development as seen in Smalltalk and modern live coding tools
-
-**Sources:**
-- Paul Graham's writings on Lisp macros and their advantages
-- Genetic Programming research (Koza, 1992)
-- Live coding community practices and tools
+The recommended phased approach is: **"Phase 1: AST interpreter in Rust (baseline), Phase 2: XR-Lang-level optimizations, Phase 3: Bytecode compiler in XR-Lang."** Writing the compiler in XR-Lang itself allows for sophisticated optimizations and proves the language's maturity. This follows the Lisp tradition where compilers are often written in the language they compile:
 
 ```lisp
-; Example: Interactive code evolution macro
-(defmacro evolve-on-click [object-name evolution-strategy]
-  `(defbehavior ,(symbol (str object-name "-evolver"))
-     (state (generation 0)
-            (mutations []))
-     (on-click ()
-       ; Analyze current scene structure
-       (let ((scene-ast (parse-self))
-             (context (analyze-interaction-patterns))
-             (new-code (generate-evolution scene-ast context)))
-         ; Write new behavior to file
-         (update-source-code! new-code)
-         (set! generation (+ generation 1))
-         (push! mutations new-code)))))
+(defn compile-expr [expr]
+  (cond
+    (literal? expr) [(push expr)]
+    (symbol? expr) [(load expr)]
+    (if? expr) (compile-if expr)
+    (lambda? expr) (compile-lambda expr)
+    (application? expr) (compile-app expr)))
 
-; Complex example: Neural architecture search through interaction
-(defmacro neural-architecture-builder [seed-network]
-  `(defbehavior architecture-explorer
-     (state (current-architecture ,seed-network)
-            (performance-history [])
-            (search-space (generate-search-space ,seed-network)))
-     
-     (on-interact (interaction-type position)
-       (let* ((selected-layer (raycast-to-layer position))
-              (mutation-type (classify-interaction interaction-type))
-              (new-architecture 
-                (case mutation-type
-                  (:expand (add-parallel-branch selected-layer))
-                  (:deepen (add-sequential-layer selected-layer))
-                  (:prune (remove-redundant-paths selected-layer))
-                  (:optimize (gradient-guided-mutation selected-layer)))))
-         
-         ; Generate new DSL code for the architecture
-         (let ((new-scene-code (architecture->dsl new-architecture)))
-           ; Update the source file with new architecture
-           (write-to-source! 
-             (replace-in-ast (current-source-ast)
-                            'neural-architecture-definition
-                            new-scene-code))
-           
-           ; Visualize the change
-           (spawn-transition-effect selected-layer new-architecture))))))
+(defn compile-to-bytecode [ast]
+  (flatten (map compile-expr ast)))
 ```
 
-### Interactive Compiler System
+#### 9. Selective Persistence Policies
 
-This visual shader compiler implements Bret Victor's principle that "we need to understand what the code is doing. Visualize data, not code. Dynamic behavior, not static structure." By creating 3D representations of shader nodes that compile to executable code, we bridge the gap between visual thinking and textual programming.
-
-The system demonstrates "controlled runtime modifications" as described in Common Lisp research, where "implementations create static code" while leaving "place for controlled runtime modifications (for example by using a runtime compiler, loading code, evaluating code, replacing code, ...)"
-
-**Inspired by:**
-- Visual programming languages like Max/MSP and Blender's shader nodes
-- Bret Victor's "Inventing on Principle" demonstrations of immediate visual feedback
-- Smalltalk's image-based development where code and environment are unified
-
-**Sources:**
-- Victor, Bret. "Inventing on Principle" CUSEC 2012 keynote
-- Visual programming research in creative coding environments
-- Real-time shader compilation techniques in modern graphics engines
+Addressing Smalltalk's "image drift" problem, XR-Lang's hybrid approach is praised by language experts: **"It lets you preserve interactive tweaks (active state) without losing the canonical definitions (source DSL)."** This three-layer system ensures developers can explore and tweak in real-time without fear of corrupting the base system - combining the best of image-based and file-based development:
 
 ```lisp
-; Example: Visual shader compiler that generates WGSL from 3D node graphs
-(defmacro visual-shader-compiler []
-  `(defscene3d shader-workshop
-     (object shader-node-spawner cube
-       (position -5 0 0)
-       (scale 0.5 0.5 0.5)
-       (behavior 
-         (on-click ()
-           ; Spawn a new shader node
-           (let ((new-node (create-shader-node (random-shader-op))))
-             ; Add to scene AST
-             (add-to-scene! new-node)
-             ; Update source code
-             (append-to-source! (node->dsl new-node))))))
-     
-     (object compile-button cube
-       (position 5 0 0)
-       (scale 1 1 1)
-       (color 0 1 0)
-       (behavior
-         (on-click ()
-           ; Analyze all shader nodes and connections
-           (let* ((graph (extract-shader-graph (current-scene)))
-                  (wgsl-code (compile-graph->wgsl graph))
-                  (dsl-shader (generate-shader-dsl wgsl-code)))
-             
-             ; Write new shader definition to source
-             (update-source-section! 
-               :shaders
-               dsl-shader)
-             
-             ; Hot-reload with new shader
-             (trigger-hot-reload!)
-             
-             ; Show compilation result
-             (spawn-text-display wgsl-code)))))))
+; Implementing the three-layer state system
+(defmacro with-meta [obj & metadata]
+  `(attach-metadata ~obj ~(apply hash-map metadata)))
+
+(defn apply-persistence-policy [obj]
+  (case (:meta obj)
+    :preserve-runtime (preserve-in-journal obj)
+    :sync-to-code (schedule-code-sync obj)
+    :volatile nil
+    :reset (reset-on-reload obj)))
 ```
 
-### Evolution Strategies through Interaction
+### Success Criteria
+- [ ] Macro system working with hygiene
+- [ ] Can evaluate XR-Lang in XR-Lang
+- [ ] Compiler generates valid bytecode
+- [ ] Persistence policies functional
 
-This genetic programming system implements what John Koza pioneered: "automatically creating computer programs using the Darwinian principle of survival of the fittest." By making evolution interactive through 3D gestures, we implement what Victor advocates: immediate feedback between intent and result.
+## Stage C: Live Tooling
 
-The system embodies "evolutionary computing systems such as neuroevolution, genetic programming and other evolutionary algorithms" applied to live code generation, where user interaction drives the fitness function rather than automated metrics.
+### Concrete Tasks
 
-**Inspired by:**
-- John Koza's Genetic Programming research
-- Interactive evolution systems in creative applications
-- Karl Sims' evolved virtual creatures and interactive selection
+#### 10. 3D Inspector (Smalltalk-style Halos)
 
-**Sources:**
-- Koza, John R. "Genetic Programming: On the Programming of Computers by Means of Natural Selection." MIT Press, 1992
-- Sims, Karl. "Evolving Virtual Creatures." SIGGRAPH 1994
-- Interactive evolutionary computation research (Takagi, 2001)
+**"Powerful Introspection & Reflection"** is emphasized as a must-have feature from Lisp and Smalltalk. The 3D inspector extends Smalltalk's morphic halos into XR space - allowing developers to point at any 3D object and instantly see its code, state, and history. This deep, live introspection makes the system transparent and debuggable:
 
 ```lisp
-; Example: Genetic programming through 3D interaction
-(defmacro genetic-behavior-evolver [initial-population]
-  `(defbehavior genetic-controller
-     (state (population ,initial-population)
-            (fitness-scores {})
-            (generation 0))
-     
-     (on-frame (dt)
-       ; Each cube represents a genetic program
-       (for-each [individual population]
-         (execute-genetic-program individual dt)))
-     
-     (on-select (selected-object)
-       ; User selection indicates fitness
-       (update-fitness! selected-object (calculate-fitness)))
-     
-     (on-gesture (gesture-type)
-       (case gesture-type
-         ; Swipe up: reproduce selected
-         (:swipe-up 
-           (let* ((parents (get-selected-objects))
-                  (offspring (crossover-and-mutate parents)))
-             ; Generate new behavior code
-             (let ((new-behavior-code (genome->behavior offspring)))
-               ; Add to source file
-               (append-behavior-to-source! new-behavior-code)
-               ; Spawn visual representation
-               (spawn-object-with-behavior offspring))))
-         
-         ; Swipe down: cull weak performers
-         (:swipe-down
-           (let ((weak (filter #(< (fitness %) threshold) population)))
-             ; Remove from source
-             (remove-behaviors-from-source! weak)
-             ; Remove from scene
-             (destroy-objects weak)))))))
+(defn create-inspector-halo [object]
+  (spawn-ui-ring
+    {:inspect (fn [] (show-object-state object))
+     :code (fn [] (show-object-code object))
+     :timeline (fn [] (show-object-history object))
+     :probes (fn [] (attach-probe object))}))
+
+; Visual probes as first-class citizens
+(defprobe vector-visualizer [vec]
+  (draw-arrow (origin) vec (magnitude vec)))
+
+(defprobe value-gauge [value min max]
+  (draw-arc value min max))
 ```
 
-### Live Pattern Language Development
+*Morphic halos in Squeak Smalltalk - direct manipulation of live objects (although only in 2D):*
 
-This pattern recording system implements Christopher Alexander's concept of "pattern languages" but applied to interactive programming. By recording interaction patterns and automatically generating reusable macros, we create what Alexander called "a language" that "gives each person who uses it the power to create an infinite variety of new and unique buildings, just as his ordinary language gives him the power to create an infinite variety of sentences."
+![Smalltalk Halos](/images/morphic-halo.gif)
 
-The system demonstrates the power of homoiconic languages for pattern abstraction: once a pattern is recognized, it can immediately become a first-class construct in the language through macro generation.
+#### 11. Omnibox REPL
 
-**Inspired by:**
-- Christopher Alexander's "A Pattern Language" methodology
-- Programming pattern detection and abstraction research
-- Live coding practices where patterns emerge through performance
-
-**Sources:**
-- Alexander, Christopher. "A Pattern Language: Towns, Buildings, Construction." Oxford University Press, 1977
-- Pattern recognition in programming behavior research
-- Live coding community documentation and practices
+Extending the traditional REPL concept: **"Lisp and Smalltalk environments traditionally revolve around a REPL or workspace where you 'converse' with the system."** XR-Lang takes this further with an omnibox that understands intent - not just evaluating code but searching, creating, and even invoking AI assistance:
 
 ```lisp
-; Example: Building a pattern language through interaction
-(defmacro pattern-recorder []
-  `(defbehavior pattern-builder
-     (state (recorded-patterns [])
-            (current-recording nil))
-     
-     (on-key "R"
-       ; Start recording interaction pattern
-       (set! current-recording (new-pattern-recording)))
-     
-     (on-interaction (any)
-       (when current-recording
-         (record-interaction! current-recording any)))
-     
-     (on-key "S"
-       ; Stop recording and generate macro
-       (when current-recording
-         (let* ((pattern (analyze-recording current-recording))
-                (macro-code (pattern->macro pattern))
-                (macro-name (generate-pattern-name pattern)))
-           
-           ; Write new macro to source file
-           (prepend-to-source!
-             `(defmacro ,macro-name []
-                ,macro-code))
-           
-           ; Create visual representation of pattern
-           (visualize-pattern pattern)
-           
-           ; Allow immediate use
-           (eval-and-reload macro-code))))))
+(defn omnibox-eval [input]
+  (match (parse-intent input)
+    [:eval code] (eval code)
+    [:search pattern] (find-in-scene pattern)
+    [:create description] (ai-generate-object description)
+    [:help topic] (show-help topic)))
 ```
 
-### Self-Evolving Scene Example
+#### 12. Time Machine UI for live debugging
+
+Core feature of XR-Lang is **"Interactive Debugging & Time Travel"** - being able to scrub through the history of changes addresses "what caused this state?", a perennial debugging question. This goes beyond traditional debuggers by making time itself a navigable dimension, crucial for understanding complex AI-generated code:
 
 ```lisp
-; A scene that rewrites itself based on user interaction
-(defmacro self-evolving-scene []
-  `(defscene3d evolution-chamber
-     ; Meta-controller that manages evolution
-     (object evolution-controller hidden
-       (behavior
-         (state (evolution-history [])
-                (complexity-score 0))
-         
-         (on-frame (dt)
-           ; Monitor user interaction patterns
-           (let ((patterns (analyze-interaction-history)))
-             (when (should-evolve? patterns complexity-score)
-               (evolve-scene! patterns))))))
-     
-     ; Spawner cube - clicking generates new interactive objects
-     (object spawner cube
-       (position 0 2 0)
-       (scale 0.5 0.5 0.5)
-       (color 1 0.5 0)
-       (meta (sync-to-code on-click))
-       (behavior
-         (on-click (click-pos)
-           (let* ((context (analyze-scene-context click-pos))
-                  (new-object-code (generate-contextual-object context))
-                  (new-macro (generate-interaction-macro context)))
-             
-             ; Add new object to source
-             (append-to-scene-source! new-object-code)
-             
-             ; Add new macro for similar operations
-             (prepend-to-source! new-macro)
-             
-             ; Visualize the generation
-             (spawn-generation-effect click-pos)))))
-     
-     ; Compiler cube - clicking compiles visual connections into behaviors
-     (object compiler cube
-       (position 3 0 0)
-       (scale 0.8 0.8 0.8)
-       (color 0 1 0)
-       (behavior
-         (on-click ()
-           (let* ((connections (trace-visual-connections))
-                  (behavior-graph (connections->behavior-graph connections))
-                  (compiled-behavior (compile-behavior-graph behavior-graph)))
-             
-             ; Replace behaviors section in source
-             (update-source-section! :behaviors compiled-behavior)
-             
-             ; Show compilation result
-             (display-compilation-result compiled-behavior)))))
-     
-     ; Pattern library - accumulated learned patterns
-     (object pattern-library plane
-       (position -3 0 -3)
-       (scale 2 0.1 2)
-       (behavior
-         (on-hover (hover-pos)
-           ; Visualize available patterns
-           (show-pattern-menu (get-learned-patterns)))
-         
-         (on-select (pattern)
-           ; Apply selected pattern to scene
-           (let ((instantiated (instantiate-pattern pattern)))
-             (append-to-scene-source! instantiated)))))))
+; Low-level time-travel hooks - the foundation
+(defprotocol TimeCapture
+  (capture-frame [state timestamp])
+  (interpolate-between [state1 state2 t])
+  (diff-states [before after])
+  (branch-timeline [base-time variation]))
+
+; Core time-travel engine with customizable hooks
+(deftimeengine default-engine
+  :capture-rate 60  ; fps
+  :max-history 10000  ; frames
+  :interpolation :cubic-bezier
+  
+  ; Hook: What state to capture each frame
+  (on-capture [world]
+    {:objects (get-all-transforms world)
+     :properties (get-all-properties world)
+     :events (get-frame-events world)})
+  
+  ; Hook: How to visualize state differences
+  (on-visualize-diff [before after]
+    (generate-ghost-trails before after))
+  
+  ; Hook: Custom interpolation for smooth scrubbing
+  (on-interpolate [frames target-time]
+    (bezier-interpolate frames target-time)))
+
+; High-level timeline UI component (customizable)
+(defcomponent timeline-scrubber
+  :engine default-engine  ; Use specific engine
+  
+  (state [current-time (now)
+          playback-speed 1.0
+          selected-objects #{}
+          parameter-variations {}])
+  
+  ; Multi-dimensional scrubbing (time + parameters)
+  (on-scrub [time-position param-values]
+    ; Travel through time
+    (travel-to! time-position)
+    
+    ; Generate parameter variation ghosts
+    (for [param param-values]
+      (spawn-ghost-timeline param))
+    
+    ; Show state graphs for selected objects
+    (update-state-graphs selected-objects time-position))
+  
+  ; Visualization layers
+  (render []
+    (layer :timeline
+      (draw-timeline-rail
+        (mark-checkpoints)
+        (show-branches)
+        (indicate-current-time)))
+    
+    (layer :variations
+      ; Like the robot paths example - show multiple variations
+      (for [variation (get-parameter-variations)]
+        (draw-ghost-path variation :opacity 0.3)))
+    
+    (layer :graphs
+      ; Like the histogram graphs in the first image
+      (for [property (get-tracked-properties)]
+        (draw-property-graph property :over-time)))
+    
+    (layer :trails
+      ; Like Mario's jump trail - persistent visualization
+      (for [object selected-objects]
+        (draw-motion-trail object :history-length 100)))))
+
+; Custom 3D time-travel debugger for physics simulation
+(deftimeline-debugger physics-debugger
+  :extends timeline-scrubber
+  
+  ; Custom capture for physics-specific data
+  (on-capture [world]
+    (merge (super world)
+           {:velocities (get-all-velocities world)
+            :forces (get-all-forces world)
+            :collisions (get-frame-collisions world)}))
+  
+  ; 3D visualization of force vectors over time
+  (on-render-3d [time-slice]
+    (for [object (get-physics-objects time-slice)]
+      (draw-3d-vector (get-position object)
+                      (get-velocity object)
+                      :color :blue)
+      (draw-3d-vector (get-position object)
+                      (get-force object)
+                      :color :red)))
+  
+  ; Parameter variation for initial conditions
+  (on-parameter-vary [param-name range]
+    ; Like the angle variation in the robot example
+    (parallel-timelines
+      (for [value range]
+        (simulate-with param-name value)))))
+
+; Behavior-specific debugger with custom visualizations
+(deftimeline-debugger behavior-debugger
+  :extends timeline-scrubber
+  
+  ; Track behavior state machines
+  (on-capture [entity]
+    {:behavior-state (get-current-state entity)
+     :behavior-transitions (get-recent-transitions entity)
+     :behavior-stack (get-behavior-stack entity)})
+  
+  ; Visualize state machine evolution over time
+  (on-render-timeline [history]
+    (draw-state-machine-evolution history))
+  
+  ; Show all possible execution paths
+  (on-branch-preview [current-state possible-inputs]
+    (for [input possible-inputs]
+      (preview-execution-branch current-state input))))
+
+; Usage: Declarative time-travel debugging setup
+(defscene3d debugging-workspace
+  ; Built-in scrubber with default settings
+  (timeline-scrubber :id :main-scrubber)
+  
+  ; Custom debugger for specific subsystem
+  (physics-debugger 
+    :id :physics-debug
+    :target-objects [(get-entities-with-tag :physics)])
+  
+  ; Multiple synchronized timelines
+  (synchronized-debuggers
+    [(behavior-debugger :track :ai-agents)
+     (animation-debugger :track :characters)
+     (particle-debugger :track :effects)]))
+
+; Future high-level abstractions (what users will actually write):
+; Just one line to make any object debuggable!
+
+(defscene3d game-world
+  ; Simple one-liner to add time-travel debugging
+  (cube 
+    (position 0 0 0)
+    (debug-time-travel))  ; That's it! Full debugging enabled
+  
+  ; Or attach debugging with custom visualization
+  (physics-ball
+    (position 5 0 0)
+    (debug-with :physics-debugger))  ; Use specialized debugger
+  
+  ; Global time-travel UI summoned with gesture/key
+  (on-gesture :debug-mode
+    (toggle-time-machine))  ; Show/hide the UI
+  
+  ; Even simpler - automatic debugging in dev mode
+  (meta :debug-all-in-dev true))
+
+; The abstraction will expand to rich functionality:
+; (debug-time-travel) automatically generates:
+; - Timeline scrubber for this object
+; - Motion trails when selected
+; - State history graphs
+; - Parameter variation ghosts
+; - All connected to a global time-travel UI
 ```
 
-## 3. AI Integration Layer
+As Bret Victor describes in his talk[ "Inventing on Principle"](https://www.youtube.com/watch?v=PUv66718DII) – why not show the effects of predicted changes, and change over time? Time is the missing element in a static display of code and rendered output:
 
-This layer implements what researchers call "human-AI collaborative programming" or "AI pair programming," extending beyond simple code completion to true partnership. As noted in recent GitHub research: "What if Copilot could be more than just an assistant? What if it could actively collaborate with you—working alongside you on synchronous tasks, tackling issues independently, and even reviewing your code?"
+![Time travelling debugging](/images/time-travel-debugging.jpg)
 
-Our approach implements "collaborative intelligence" - what happens when "humans work in conjunction with AI to achieve outstanding results. In many scenarios, humans and computers working side by side can blow away the achievements of people or machines alone."
+![Visualizing program runtime state histories for iterating faster](/images/time-travel-debugging-mario.png)
 
-**Theoretical Foundation:**
-- Evolution from traditional pair programming to human-AI collaboration
-- Multi-step reasoning and agentic capabilities in AI systems
-- Natural language interaction through conversational interfaces
-- The philosophy of "human-machine symbiosis" where "human cognition and machine computation amplify one another"
+![Simulating multiple robot's paths and "scrubbing" through different variations of "angle" variable](/images/time-travel-debugging-driving-angles.png)
 
-**Sources:**
-- GitHub Blog: "From pair to peer programmer: Our vision for agentic workflows in GitHub Copilot"
-- ArXiv: "Will Your Next Pair Programming Partner Be Human?" (2024)
-- Cross Labs: "Life After Programming: Embracing Human-Machine Symbiosis in the Age of AI"
+### Success Criteria
+- [ ] Can inspect any object in 3D space
+- [ ] Probes provide live data visualization
+- [ ] Time travel with visual feedback
+- [ ] REPL integrated in 3D world
+- [ ] Low-level hooks to support building custom time travel debuggers in 3D space and XR space
+- [ ] Example custom time travel debugger in 3D space that leverages implemented tooling (testing the full functionality)
 
-### AI as First-Class Citizen
+## Stage D: Meta-Programming
 
-By making AI a first-class citizen in the DSL, we implement what GitHub calls "agentic capabilities" where AI agents "don't just assist developers but actively solve problems through multi-step reasoning and execution." The AI can "break down complex tasks and take the necessary steps to solve them, providing updates along the way."
+### Concrete Tasks
 
-This approach moves beyond the current state where "developers who use GitHub Copilot reporting up to 75% higher satisfaction" to a deeper integration where AI becomes a true collaborative partner in the creative process.
+#### 13. Source Rewriter
 
-**Inspired by:**
-- GitHub Copilot's evolution from code completion to collaborative partner
-- Multi-agent systems research in AI
-- Conversational programming interfaces
-
-**Sources:**
-- GitHub Copilot documentation and research papers
-- Multi-agent AI systems literature
-- Conversational AI in programming research
+Experienced language designers warn about **"Metaprogramming Safety & Clarity"** - with self-modifying code comes great responsibility. XR-Lang addresses this with provenance tracking and annotations, ensuring every transformation is traceable. As noted: "establishing conventions for generated code will help developers distinguish human-written from AI/macro-written code":
 
 ```lisp
-; AI as first-class citizen in the DSL
+(defn rewrite-source! [ast-path new-ast]
+  ; Safely modify source with provenance tracking
+  (let [current (read-source)
+        modified (update-in current ast-path (constantly new-ast))
+        annotated (add-metadata modified
+                    {:timestamp (now)
+                     :author (current-author)
+                     :generated (is-ai-generated? new-ast)})]
+    (write-source! annotated)
+    (hot-reload!)))
+
+; Example: Interactive evolution
+(defmacro evolve-on-click [object]
+  `(on-click ~object
+     (let [current-code (get-source ~object)
+           evolved (ai-evolve-behavior current-code)]
+       (rewrite-source! (path-to ~object) evolved))))
+```
+
+#### 14. Pattern Recorder
+
+Beyond traditional macro recording, this implements **"Pattern detection and learning"** - the system observes user interactions and generates reusable macros. This bridges the gap between direct manipulation (Smalltalk's strength) and symbolic programming (Lisp's domain), making the language learn from how it's used:
+
+```lisp
+(defn record-interaction-pattern []
+  (start-recording!)
+  ; User performs actions...
+  (let [pattern (analyze-recording)]
+    (generate-macro-from-pattern pattern)))
+
+; Generated macro example
+(defmacro bounce-and-spin [object]
+  `(parallel
+     (animate ~object :position (bounce-curve 2.0))
+     (animate ~object :rotation (spin 360))))
+```
+
+#### 15. Visual Shader Compiler
+
+**"Visual Representations of Code Structures"** is mentioned as a key feature for 3D IDEs. This shader compiler exemplifies dual representation - visual nodes for intuitive editing, compiled to efficient code. It's reminiscent of LabVIEW or Unreal Blueprints, but now in an immersive environment where the visual and textual remain synchronized:
+
+```lisp
+; 3D nodes compile to WGSL
+(defn compile-shader-graph [nodes edges]
+  (-> (build-dependency-graph nodes edges)
+      (topological-sort)
+      (generate-wgsl)
+      (optimize-shader)))
+
+; Interactive shader editing
+(defbehavior shader-workshop
+  (on-connect [node1 node2]
+    (let [shader (compile-shader-graph (get-all-nodes))]
+      (hot-reload-shader! shader)
+      (preview-on-object shader))))
+```
+
+### Success Criteria
+- [ ] Can modify own source code
+- [ ] Pattern recording generates macros
+- [ ] Visual programming compiles to code
+- [ ] Safe code generation with provenance
+
+## Stage E: AI Integration
+
+### Concrete Tasks
+
+#### 16. AI as Tool (Capability-Based)
+
+AI integration is seen as **"taking the REPL to the next level by literally conversing with an AI agent in the language."** Using capability-based security ensures AI assistance remains controlled and auditable. This transforms the traditional human-computer interaction into a true partnership, where the AI can "assist in writing new macros or even modify the language itself":
+
+```lisp
+(defcapability ai-generate
+  :requires [:network :compute]
+  :quota 1000  ; requests per day
+  :audit true)
+
+(defn ai-generate-dsl [description context]
+  (with-capability ai-generate
+    (-> (create-prompt description context)
+        (send-to-ai-service)
+        (parse-response)
+        (validate-safety)
+        (present-as-diff))))
+```
+
+#### 17. Conversational Programming
+
+Extending beyond traditional REPLs, this is **"akin to having a supercharged REPL that not only evaluates code but also writes code alongside you."** The persistent memory ensures the AI learns from each session, building context over time - a crucial evolution from stateless command interfaces:
+
+```lisp
 (defai assistant
-  (model "claude-4-opus")
-  (capabilities [code-generation world-understanding explanation])
-  (memory (persistent-context "project-history.ctx"))
-  (personality "collaborative curious precise"))
-
-(defmacro ai-conversation []
-  `(defbehavior ai-interface
-     (state (conversation-history [])
-            (pending-suggestions [])
-            (trust-level 0.5))
-     
-     (on-voice (transcript)
-       ; Natural language understanding
-       (let* ((intent (ai-parse-intent transcript))
-              (context (gather-world-context))
-              (response (ai-generate-response intent context)))
-         
-         (case (:type intent)
-           ; Direct code generation
-           (:generate
-             (let ((code (ai-generate-dsl (:prompt intent) context)))
-               (present-code-preview code)
-               (on-approval () (inject-code! code))))
-           
-           ; Multimodal generation pipeline
-           (:create-video
-             (let* ((video-prompt (extract-video-description transcript))
-                    (video (generate-video-veo2 video-prompt))
-                    (theater-code (ai-generate-theater-component video)))
-               (preview-in-world video theater-code)
-               (on-approval () 
-                 (embed-video! video)
-                 (update-source! theater-code))))
-           
-           ; Meta-level evolution
-           (:evolve-system
-             (let* ((evolution-plan (ai-analyze-system-patterns))
-                    (suggested-macros (ai-generate-meta-improvements))
-                    (explanation (ai-explain-reasoning evolution-plan)))
-               (present-evolution-ui evolution-plan explanation)
-               (on-approval (selections)
-                 (apply-meta-evolution! selections)))))))
-     
-     ; AI observes and learns from interactions
-     (on-any-interaction (interaction)
-       (ai-record-pattern interaction)
-       (when (ai-detects-inefficiency interaction)
-         (queue-suggestion! (ai-suggest-improvement interaction))))))
+  :model "claude-3-opus"
+  :memory (persistent-store "assistant.mem")
+  :personality "collaborative precise creative"
+  
+  (on-request [intent context]
+    (case (:type intent)
+      :generate (generate-code-proposal intent context)
+      :explain (explain-with-visualization intent context)
+      :evolve (suggest-evolution-path intent context)
+      :debug (analyze-problem intent context))))
 ```
 
-### Time-Travel & Versioning System (Kay-inspired)
+#### 18. Explainable Meta-Programming
 
-This temporal navigation system implements Alan Kay's vision of computing as "an amplifier for human imagination" by making time itself a navigable dimension of the programming experience. The system draws inspiration from Smalltalk's image-based development where "every change creates a timeline entry" and the entire system state can be captured and restored.
-
-The causal chain visualization addresses what Victor identified as a core problem: making the invisible visible. By showing not just what changed, but why it changed and what effects rippled through the system, we create what Kay called "a medium that could be anything."
-
-**Inspired by:**
-- Smalltalk's image-based development and live modification capabilities
-- Version control systems evolution toward semantic understanding
-- Time-travel debugging in modern development tools
-- Alan Kay's vision of computing as a "universal medium"
-
-**Sources:**
-- Kay's writings on Smalltalk and the Dynabook vision
-- Research on time-travel debugging systems
-- Version control and collaborative development research
+Addressing the concern that **"Lisp macros and self-evolution can produce inscrutable code if not managed,"** XR-Lang makes every transformation visualizable and understandable. This transparency is essential when AI generates code - developers must be able to trust but verify what's happening:
 
 ```lisp
-(defmacro temporal-navigation []
-  `(defsystem time-machine
-     (state (timeline (create-timeline))
-            (current-moment (now))
-            (branches {}))
-     
-     ; Every change creates a timeline entry
-     (on-any-change (change)
-       (let ((snapshot (capture-world-state)))
-         (add-to-timeline! timeline current-moment snapshot change)
-         (ai-analyze-change change)))
-     
-     ; Navigate through time
-     (on-key "Cmd+Z" () (travel-back! timeline))
-     (on-key "Cmd+Shift+Z" () (travel-forward! timeline))
-     
-     ; Time-travel debugging with AI assistance
-     (on-key "Cmd+T" ()
-       (enter-temporal-debug-mode!
-         (ai-assistant-overlay
-           "I can help you understand what changed and why")))
-     
-     ; Branch alternative timelines
-     (on-key "Cmd+B" ()
-       (let ((branch-point current-moment))
-         (create-branch! branch-point)
-         (ai-suggest-alternative-paths branch-point)))
-     
-     ; AI explains causality
-     (on-inspect (moment)
-       (let* ((causal-chain (trace-causality timeline moment))
-              (explanation (ai-explain-causality causal-chain)))
-         (visualize-causal-graph causal-chain explanation)))))
+(defn explain-transformation [before after]
+  (let [diff (semantic-diff before after)
+        explanation (ai-explain-changes diff)
+        visualization (animate-ast-transformation before after)]
+    (present-explanation
+      {:visual visualization
+       :textual explanation
+       :confidence (ai-confidence-score)
+       :alternatives (generate-alternatives)})))
 ```
 
-### Multimodal Creation Pipeline
+#### Watch Bret Victor's "Inventing on Principle"
 
-This pipeline implements true multimodal interaction, moving beyond text-based programming to what Kay envisioned as "personal dynamic media." By integrating voice, video generation (Veo3), and 3D interaction, we create what he called "a medium that could incorporate all other media."
+[![Bret Victor - Inventing on Principle](https://img.youtube.com/vi/PUv66718DII/0.jpg)](https://www.youtube.com/watch?v=PUv66718DII)
 
-The voice-driven creation system implements modern advances in "conversational code generation" where "AI coding tools now support natural language interaction through chat interfaces, allowing users to ask questions, request explanations, or specify code changes using conversational prompts."
+*Essential viewing: Bret Victor demonstrates immediate connection between creators and creation*
 
-**Inspired by:**
-- Alan Kay's vision of multimedia computing integration
-- Modern multimodal AI systems (GPT-4V, Gemini, etc.)
-- Voice-first programming interfaces
-- Real-time video generation technologies
+### Success Criteria
+- [ ] AI generates valid DSL code
+- [ ] Natural language scene modification
+- [ ] Every AI action explainable
+- [ ] Persistent learning across sessions
 
-**Sources:**
-- Kay's "Personal Dynamic Media" paper
-- Recent advances in multimodal AI research
-- Voice programming interface studies
-- Video generation AI research (Veo, Runway, etc.)
+## Technical Specifications
+
+### Language Syntax (S-Expressions/EDN)
+
+Language experts celebrate seeing **"S-expression–like syntax"** as it provides the foundation for homoiconicity. By choosing EDN (Extensible Data Notation) over pure S-expressions, XR-Lang gains richer literal syntax for maps, vectors, and sets while maintaining the crucial property that **"code is represented as data structures that the language itself can manipulate"**:
 
 ```lisp
-(defmacro multimodal-workshop []
-  `(defscene3d creation-space
-     ; Voice-driven creation
-     (behavior voice-creator
-       (on-voice-command (command)
-         (match command
-           ; Natural language to 3D objects
-           ("create a * that *" [object-type properties]
-            (let ((dsl-code (ai-generate-object object-type properties)))
-              (preview-object dsl-code)
-              (speak-ai "I've created a preview. Say 'confirm' to add it.")))
-           
-           ; Voice to shader
-           ("make it look like *" [description]
-            (let* ((shader-code (ai-generate-shader description))
-                   (wgsl (compile-to-wgsl shader-code)))
-              (apply-shader-preview wgsl)
-              (speak-ai "Here's how it would look. Should I apply it?")))
-           
-           ; Voice to behavior
-           ("when I * it should *" [trigger action]
-            (let ((behavior-code (ai-generate-behavior trigger action)))
-              (simulate-behavior behavior-code)
-              (speak-ai "I've created this behavior. Want to see the code?"))))))
-     
-     ; Video integration pipeline
-     (object video-generator cube
-       (position 0 2 0)
-       (meta (ai-enhanced))
-       (behavior
-         (on-interact ()
-           (start-video-pipeline!
-             (voice-to-prompt)
-             (prompt-to-veo3)
-             (veo3-to-texture)
-             (texture-to-surface)
-             (surface-to-interactive-screen)))))
-     
-     ; AI code visualization
-     (object ai-brain hologram
-       (position 5 3 0)
-       (behavior
-         (on-frame (dt)
-           ; Visualize AI's current thinking
-           (let ((thoughts (ai-get-current-reasoning)))
-             (update-hologram-display thoughts)))
-         
-         (on-click ()
-           ; Explain AI's reasoning
-           (let ((explanation (ai-explain-last-decision)))
-             (display-explanation-ui explanation)))))))
+; Core syntax - homoiconic from the start
+(def value 42)
+(defn function [x] (* x 2))
+(defmacro macro [x] `(list ~x))
+
+; Data literals
+{:map "value" :key 2}      ; Maps
+[1 2 3]                     ; Vectors  
+#{1 2 3}                    ; Sets
+'(1 2 3)                    ; Lists
+
+; Metadata
+^{:doc "Camera that preserves position"}
+(camera
+  (position 0 5 10)
+  (meta preserve-runtime))
 ```
 
-### AI-Human Collaborative Evolution
+### Value Model Specification
 
-This system implements what researchers call "human-machine symbiosis" - not just AI assistance, but true collaborative intelligence where "human intuition and machine computation synergize to mutually cause a desirable outcome." The shared memory system enables what current AI pair programming lacks: persistent context and learning across sessions.
+```rust
+// Comprehensive value system from day one
+pub enum Value {
+    // Primitives
+    Nil,
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Str(String),
+    Symbol(Symbol),
+    Keyword(Keyword),
+    
+    // Collections
+    List(List<Value>),
+    Vector(Vec<Value>),
+    Map(HashMap<Value, Value>),
+    Set(HashSet<Value>),
+    
+    // Special
+    AST(ASTNode),           // Code as data
+    Object(ObjectId),       // Scene objects
+    Closure(Closure),       // Functions
+    Macro(Macro),          // Macros
+    
+    // Extended
+    Capability(Capability), // Security
+    Channel(Channel),       // Concurrency
+}
+```
 
-The consensus-based change system addresses a key challenge in AI collaboration: maintaining human agency while leveraging AI capabilities. As noted in collaborative programming research: "traditional pair programming underscores the dynamics of collaborations between two human peers, while the rise of GenAI has also enabled human-AI collaboration, introducing a new dimension of pair programming."
+### Persistence Model
 
-**Inspired by:**
-- J.C.R. Licklider's "Man-Computer Symbiosis" vision
-- Modern AI pair programming research
-- Consensus algorithms in distributed systems
-- Long-term memory systems in AI
+```rust
+// Event-sourced architecture
+pub struct PersistenceLayer {
+    // Immutable snapshots
+    snapshots: SnapshotStore,
+    
+    // Event journal
+    journal: Journal,
+    
+    // Active branches
+    branches: HashMap<BranchId, Journal>,
+    
+    // Conflict resolution
+    merger: ConflictMerger,
+}
 
-**Sources:**
-- Licklider, J.C.R. "Man-Computer Symbiosis." IRE Transactions, 1960
-- Recent GitHub Copilot research on human-AI collaboration
-- AI memory and context persistence research
+pub struct JournalEntry {
+    timestamp: u64,
+    author: Author,
+    change: Change,
+    provenance: Provenance,  // Human/AI/Generated
+}
+```
+
+### Scene Graph Integration
+
+Following the principle to **"implement the minimal low-level substrate in Rust and high-level logic in XR-Lang,"** the scene DSL demonstrates clear separation of concerns. The Entity-Component-System architecture maps naturally to both functional programming (systems as functions over components) and the live object manipulation that Smalltalk pioneered:
 
 ```lisp
-(defmacro symbiotic-evolution []
-  `(defsystem collaborative-mind
-     ; Shared memory between human and AI
-     (state (shared-memory (persistent-store "evolution.mem"))
-            (human-patterns [])
-            (ai-insights [])
-            (consensus-threshold 0.7))
-     
-     ; AI watches and learns patterns
-     (behavior pattern-learner
-       (on-human-action (action)
-         (record-pattern! human-patterns action)
-         (when (ai-detects-repetition human-patterns)
-           (let ((macro-suggestion (ai-generate-macro-from-pattern)))
-             (suggest-gently macro-suggestion)))))
-     
-     ; Conversational evolution
-     (behavior evolution-dialogue
-       (on-voice "help me improve this" ()
-         (start-dialogue!
-           (ai-analyze-current-focus)
-           (ai-suggest-improvements)
-           (human-feedback-loop)
-           (collaborative-refinement)
-           (generate-final-code))))
-     
-     ; AI explains its learning
-     (behavior explainable-ai
-       (on-query "what have you learned?" ()
-         (let* ((learned-patterns (ai-summarize-learning))
-                (evolution-history (get-evolution-timeline))
-                (visualization (create-learning-graph learned-patterns)))
-           (present-learning-dashboard visualization)
-           (speak-ai (ai-narrate-learning-journey)))))
-     
-     ; Consensus-based changes
-     (behavior consensus-system
-       (on-ai-suggestion (suggestion)
-         (let ((confidence (ai-confidence-score suggestion))
-               (human-approval (request-human-review suggestion)))
-           (when (> (* confidence human-approval) consensus-threshold)
-             (apply-change! suggestion)
-             (record-decision! suggestion confidence human-approval)))))))
+; Scene DSL compiles to ECS
+(defscene3d my-world
+  ; Entities with components
+  (entity camera
+    (transform :position [0 5 10])
+    (camera-component :fov 60)
+    (meta :preserve-runtime true))
+  
+  (entity cube
+    (transform :position [0 0 0])
+    (mesh-component :type :cube)
+    (material-component :color [1 0 0])
+    (behavior rotate-on-click)))
+
+; Behaviors as systems
+(defsystem rotate-on-click
+  :components [transform clickable]
+  :on-click (fn [entity]
+    (update-component entity :transform
+      (fn [t] (rotate t :y 45)))))
 ```
 
-### Explainable Meta-Programming
+## Code Examples & Patterns
 
-This system addresses one of the key challenges in AI-assisted programming: the "black box" problem. By implementing "explainable AI" at the meta-programming level, we ensure that every AI-generated transformation can be understood, questioned, and modified by human collaborators.
+### Example 1: Self-Modifying Scene
 
-The transformation visualizer implements Victor's principle of "show the data" but applied to code transformations themselves - making the invisible process of meta-programming visible and comprehensible.
-
-**Inspired by:**
-- Explainable AI (XAI) research
-- Bret Victor's emphasis on visualization of dynamic behavior
-- Meta-programming debuggers and analysis tools
-
-**Sources:**
-- Explainable AI research literature
-- Victor's "Learnable Programming" principles
-- Meta-programming analysis and debugging tools research
+A key insight from language design is that **"the ultimate meta-circular dream is an XR-Lang that can rebuild its entire self from scratch using itself."** This example demonstrates that vision in miniature - a scene that rewrites its own source code based on interaction patterns, embodying the Lisp tradition of programs that write programs:
 
 ```lisp
-(defmacro interpretable-metasystem []
-  `(defsystem explainable-meta
-     ; AI explains what it's doing at meta-level
-     (behavior meta-narrator
-       (on-meta-operation (op)
-         (let ((explanation (ai-explain-meta-operation op)))
-           (show-explanation-overlay explanation)
-           (log-to-history explanation))))
-     
-     ; Visual representation of code transformations
-     (behavior transformation-visualizer
-       (on-code-transform (before after)
-         (let* ((diff (semantic-diff before after))
-                (visualization (animate-transformation diff))
-                (narration (ai-narrate-transformation diff)))
-           (play-transformation-animation visualization narration))))
-     
-     ; AI suggests meta-improvements with reasoning
-     (behavior meta-advisor
-       (on-inefficiency-detected (pattern)
-         (let* ((root-cause (ai-analyze-root-cause pattern))
-                (meta-solution (ai-generate-meta-fix root-cause))
-                (explanation (ai-explain-why meta-solution root-cause)))
-           (present-advisory 
-             {:problem pattern
-              :cause root-cause
-              :solution meta-solution
-              :reasoning explanation
-              :confidence (ai-confidence-level)
-              :alternatives (ai-generate-alternatives)}))))))
+; A scene that evolves based on interaction
+(defscene3d evolving-world
+  (entity evolution-controller
+    (meta :hidden true)
+    (behavior
+      (on-interaction [pattern]
+        (let [new-entity (learn-from-pattern pattern)]
+          ; Add new entity to our own source
+          (rewrite-source! 
+            (path-to-scene 'evolving-world)
+            (add-entity (current-source) new-entity))))))
+  
+  ; Entities learn and adapt
+  (entity adaptive-cube
+    (transform :position [0 0 0])
+    (mesh :type :cube)
+    (behavior
+      (on-click []
+        (let [my-behavior (get-my-behavior)
+              evolved (evolve-behavior my-behavior)]
+          ; Rewrite own behavior
+          (rewrite-source! (path-to-me) evolved))))))
 ```
 
-### Memory & Context System
+### Example 2: AI Pair Programming
 
-This persistent memory system implements what current AI systems lack: true long-term learning and context maintenance across sessions. Drawing from cognitive science research on human memory systems (episodic, semantic, procedural), we create an AI partner that grows and adapts over time.
-
-The system addresses what researchers identify as a key limitation in current AI pair programming: "each interaction starts fresh" without building on previous collaborative experiences.
-
-**Inspired by:**
-- Cognitive science research on memory systems
-- Long-term memory in AI research
-- Personalized AI assistants research
-- Context-aware computing systems
-
-**Sources:**
-- Cognitive science literature on memory systems
-- AI long-term memory research
-- Personalization in AI systems research
-- Context-aware computing literature
+This has been described as **"the love child of a Lisp Machine and a Smalltalk environment, raised in VR and trained by GPT-4."** This conversational programming example shows how natural language becomes another way to write code, with the AI understanding context and generating both immediate solutions and reusable patterns:
 
 ```lisp
-(defmacro persistent-memory []
-  `(defsystem memory-palace
-     ; Long-term memory across sessions
-     (state (episodic-memory (load-or-create "episodes.mem"))
-            (semantic-memory (load-or-create "knowledge.mem"))
-            (procedural-memory (load-or-create "skills.mem")))
-     
-     ; AI maintains context across sessions
-     (behavior context-keeper
-       (on-session-start ()
-         (let ((context (ai-recall-context)))
-           (speak-ai (format "Welcome back. Last time we were working on ~a" 
-                            (:last-focus context)))
-           (restore-workspace context))))
-     
-     ; Remember user preferences and patterns
-     (behavior preference-learner
-       (on-user-choice (choice context)
-         (update-preference-model! choice context)
-         (ai-adapt-suggestions (get-preference-model))))
-     
-     ; Semantic memory for domain knowledge
-     (behavior knowledge-builder
-       (on-new-concept (concept)
-         (let ((related (ai-find-related-concepts concept)))
-           (add-to-semantic-memory! concept related)
-           (ai-suggest-connections concept related))))))
+(defconversation creative-session
+  (human "Make something that responds to sound")
+  
+  (ai "I'll create an audio-reactive particle system. 
+       What kind of mood are you going for?")
+  
+  (human "Ethereal and flowing, like northern lights")
+  
+  (ai (generate-code
+    '(defentity aurora-particles
+       (particle-system
+         :count 1000
+         :emitter (curve-emitter :wave)
+         :color (gradient "#00ff00" "#0000ff" "#ff00ff"))
+       (behavior audio-reactive
+         (on-audio-frame [fft]
+           (let [bass (get-frequency-band fft :bass)
+                 treble (get-frequency-band fft :treble)]
+             (update-particles
+               :turbulence (* bass 2.0)
+               :color-shift treble)))))))
+  
+  (human "Perfect! Make it a reusable pattern")
+  
+  (ai (generate-macro
+    '(defmacro aurora-reactive [name & opts]
+       `(defentity ~name
+          (particle-system ~@(merge default-aurora opts))
+          (behavior audio-reactive
+            ~(generate-audio-behavior opts))))))
 ```
 
-## Comprehensive Implementation Plan
+### Example 3: Visual Shader Programming
 
-### Foundation Layer (Immediate)
+A key principle is **"keeping such visual editing in sync with textual code so that one can fluidly switch between them."** This shader example demonstrates dual representation - visual nodes for intuitive creation, textual code for precision, with hot-reload providing immediate feedback:
 
-#### 1. Camera State Preservation
-- Add `RuntimeState` struct to maintain camera position between reloads
-- Implement dirty detection for DSL sections
-- Add `(meta preserve-runtime)` directive support
-- Create keyboard shortcut [P] for preservation toggle
+```lisp
+(defshader-graph plasma-shader
+  ; Nodes defined visually, compile to WGSL
+  (input uv :type :vec2)
+  (input time :type :float)
+  
+  (node sine1 
+    :op :sin
+    :input (* uv.x 10.0))
+  
+  (node sine2
+    :op :sin  
+    :input (+ (* uv.y 10.0) time))
+  
+  (node combine
+    :op :add
+    :inputs [sine1 sine2])
+  
+  (output color
+    :value (vec4 combine 0.5 1.0)))
 
-#### 2. Basic AI Integration
-- Integrate Claude API for code generation
-- Add voice input via Whisper API
-- Create simple prompt-to-DSL pipeline
-- Implement basic explanation system
+; Interactive compilation
+(on-edit shader-graph
+  (let [wgsl (compile-to-wgsl shader-graph)]
+    (hot-reload-shader! wgsl)
+    (preview-on-sphere wgsl)))
+```
 
-### Meta-Programming Layer (Short-term)
+### Example 4: Time-Travel Debugging
 
-#### 3. Macro System
-- Implement S-expression macro parser
-- Add quasiquote support
-- Create `(update-source!)` API for self-modification
-- Add interaction triggers (on-click, on-drag)
+As strongly advocated by language design experts: **"The timeline/time-travel idea is fantastic – being able to scrub through the history of changes and see the state of the world at any moment addresses the perennial question 'what caused this state?'"** This example shows branching timelines, allowing experimentation without fear:
 
-#### 4. AI-Assisted Metaprogramming
-- Pattern detection from user interactions
-- AI-suggested macro generation
-- Code transformation visualization
-- Explanation overlays for meta-operations
+```lisp
+(deftimeline my-timeline
+  ; Every change is recorded
+  (checkpoint :start)
+  
+  (at 1000 (create-cube :pos [0 0 0]))
+  (at 2000 (move-cube :to [5 0 0]))
+  (at 3000 (branch :experiment
+    (at 3100 (scale-cube 2.0))
+    (at 3200 (color-cube :red))))
+  
+  ; Main timeline continues
+  (at 4000 (rotate-cube :y 45)))
 
-### Multimodal Layer (Medium-term)
+; Navigate through time
+(travel-to! 2500)  ; Between move and branch
+(show-diff 2000 3000)  ; What changed?
+(merge-branch :experiment :resolve-conflicts-visually)
+```
 
-#### 5. Voice-to-Everything Pipeline
-- Voice → Intent parsing
-- Intent → DSL code generation
-- Voice → Video prompt → Veo3/SD integration
-- Generated assets → 3D world embedding
+### Example 5: Live Pattern Language
 
-#### 6. Interactive Evolution
-- Genetic programming through gestures
-- Neural architecture search via interaction
-- AI-guided evolution strategies
-- Visual feedback for transformations
+A key insight is how **"XR-Lang might script the AI interactions using XR-Lang primitives"** - here, the system learns from user interactions to create new language constructs. This embodies the principle that the language should be able to extend itself based on how it's actually used:
 
-### Symbiotic Layer (Long-term)
+```lisp
+; Record interactions to create patterns
+(start-pattern-recording!)
 
-#### 7. Conversational Programming
-- Natural language scene modification
-- AI explanation of suggestions
-- Collaborative refinement loops
-- Consensus-based change application
+; User manipulates objects...
+; Clicks cube, drags to position, adds rotation
 
-#### 8. Persistent Memory & Learning
-- Cross-session context maintenance
-- User preference learning
-- Pattern library with AI curation
-- Semantic knowledge graph
+(stop-pattern-recording!)
 
-### Temporal Layer (Extended)
+; AI analyzes and generates pattern
+(defpattern place-and-spin
+  :description "Position object and add rotation"
+  :parameters [object target-pos spin-rate]
+  :actions
+  [(move-to object target-pos :duration 1.0)
+   (add-behavior object 
+     (spin :axis :y :rate spin-rate))])
 
-#### 9. Time-Travel System
-- Complete timeline capture
-- Branching alternative histories
-- Causal chain visualization
-- AI-assisted debugging through time
+; Pattern becomes first-class language construct
+(apply-pattern place-and-spin my-cube [10 0 10] 2.0)
+```
 
-#### 10. Version Control Integration
-- Semantic diff for DSL
-- AI-powered merge conflict resolution
-- Evolution history visualization
-- Collaborative branching
+## Minimal Viable Product (MVP)
 
-## Technical Implementation Details
+From lang-design-review.md, the 8 features that prove the thesis:
 
-### Core Systems to Build:
-1. **AI Service Layer**: Claude/GPT-5/Gemini (cloud) or gpt-oss:20b/qwen3:30b through Ollama (local) API integration
-2. **Voice Pipeline**: Whisper → Intent → Action
-3. **Macro Engine**: Parse, expand, hygiene
-4. **Source Rewriter**: Safe AST manipulation
-5. **Timeline Store**: Efficient state snapshots
-6. **Memory System**: Persistent context database
-7. **Explanation Engine**: AI reasoning visualization
+### MVP Checklist
+- [ ] **EDN/S-expr parser** - Homoiconic foundation
+- [ ] **Bytecode VM** - Simple interpreter/compiler
+- [ ] **Scene hot-reload** - With camera preservation
+- [ ] **Journal + time scrub** - Event-sourced state
+- [ ] **Inspector + probes** - Live data visualization  
+- [ ] **Meta directives** - preserve/sync/reset policies
+- [ ] **Source rewriter** - Safe self-modification
+- [ ] **AI proposals** - Natural language to DSL diffs
 
-### File Structure:
+```lisp
+; MVP Demo: All core features in one example
+(defscene3d mvp-demo
+  ; 1. S-expression syntax ✓
+  (camera 
+    (position 0 5 10)
+    (meta preserve-runtime))  ; 6. Meta directive ✓
+  
+  ; 3. Hot-reloadable scene ✓
+  (cube
+    (position 0 0 0)
+    (probe vector-arrow)      ; 5. Live probe ✓
+    (behavior 
+      (on-click []
+        ; 7. Source rewriting ✓
+        (rewrite-source! 
+          (path-to-me)
+          (ai-generate "make it bounce"))))))  ; 8. AI proposal ✓
+
+; 4. Time travel ✓
+(on-key "Cmd+Z" (travel-back!))
+
+; 2. This all compiles to bytecode ✓
+```
+
+## Resources & Inspirations
+
+### Essential Papers
+- **[Personal Dynamic Media](https://www.vpri.org/pdf/hc_pers_dyn_media.pdf)** - Kay & Goldberg (1977)
+- **[Man-Computer Symbiosis](https://groups.csail.mit.edu/medg/people/psz/Licklider.html)** - Licklider (1960)
+- **[Learnable Programming](https://worrydream.com/LearnableProgramming/)** - Bret Victor
+- **[A Pattern Language](https://en.wikipedia.org/wiki/A_Pattern_Language)** - Christopher Alexander
+
+### Watch: Foundational Talks
+
+**Alan Kay - Doing with Images Makes Symbols**
+[![Alan Kay - Doing with Images Makes Symbols](https://img.youtube.com/vi/p2LZLYcu_JY/0.jpg)](https://www.youtube.com/watch?v=p2LZLYcu_JY)
+
+**Stop Drawing Dead Fish - Bret Victor**
+[![Stop Drawing Dead Fish](https://img.youtube.com/vi/ZfytHvgHybA/0.jpg)](https://www.youtube.com/watch?v=ZfytHvgHybA)
+
+**The Future of Programming - Bret Victor**
+[![The Future of Programming](https://img.youtube.com/vi/8pTEmbeENF4/0.jpg)](https://www.youtube.com/watch?v=8pTEmbeENF4)
+
+### Historical Context
+
+![Lisp Machine](https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/CADR.jpg/400px-CADR.jpg)
+*MIT Lisp Machine - Where code and environment were one*
+
+![Xerox Alto](https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Xerox_Alto_mit_Rechner.JPG/400px-Xerox_Alto_mit_Rechner.JPG)
+*Xerox Alto - Birthplace of the GUI and Smalltalk*
+
+### Modern Inspirations
+- **GitHub Copilot Workspace** - AI pair programming evolution
+- **Unreal Engine Blueprints** - Visual scripting in 3D
+- **Observable** - Reactive notebooks with live coding
+- **Enso** - Visual programming with immediate feedback
+- **Dark** - Infrastructure as code with live values
+
+### Technical References
+- [Homoiconicity](https://en.wikipedia.org/wiki/Homoiconicity)
+- [Self-modifying code](https://en.wikipedia.org/wiki/Self-modifying_code)
+- [Live Programming History](https://liveprogramming.github.io/liveblog/2013/01/a-history-of-live-programming/)
+- [GitHub: awesome-live-reloading](https://github.com/hasura/awesome-live-reloading)
+
+## Project Structure
+
 ```
 xr-lang/
-├── ai/
-│   ├── claude_integration.rs
-│   ├── voice_pipeline.rs
-│   ├── explanation_engine.rs
-│   └── pattern_learner.rs
-├── meta/
-│   ├── macro_system.rs
-│   ├── source_rewriter.rs
-│   └── evolution_engine.rs
-├── temporal/
-│   ├── timeline.rs
-│   ├── branches.rs
-│   └── causality_tracer.rs
-└── memory/
-    ├── persistent_store.rs
-    ├── context_manager.rs
-    └── preference_model.rs
+├── rust/                      # ~30% of codebase
+│   ├── vm/
+│   │   ├── bytecode.rs       # Bytecode interpreter
+│   │   ├── memory.rs         # GC/memory management
+│   │   └── scheduler.rs      # Green threads/fibers
+│   ├── runtime/
+│   │   ├── ffi.rs           # Foreign functions
+│   │   ├── capabilities.rs   # Security model
+│   │   └── intrinsics.rs    # Built-in functions
+│   └── persistence/
+│       ├── journal.rs        # Event sourcing
+│       └── snapshot.rs       # State snapshots
+│
+├── xr-lang/                   # ~70% of codebase
+│   ├── core/
+│   │   ├── eval.xrl         # Metacircular evaluator
+│   │   ├── macro.xrl        # Macro system
+│   │   └── compiler.xrl     # Bytecode compiler
+│   ├── tools/
+│   │   ├── inspector.xrl    # Live inspector
+│   │   ├── debugger.xrl     # Time-travel debugger
+│   │   └── probes.xrl       # Data visualization
+│   ├── dsl/
+│   │   ├── scene.xrl        # 3D scene DSL
+│   │   ├── shader.xrl       # Shader graphs
+│   │   └── behavior.xrl     # Behavior trees
+│   └── ai/
+│       ├── assistant.xrl    # AI integration
+│       ├── patterns.xrl     # Pattern learning
+│       └── evolution.xrl    # Genetic programming
+│
+├── assets/
+│   ├── models/              # 3D models (glTF, USD, etc)
+│   └── shaders/             # WGSL shaders
+│
+└── examples/
+    ├── basic/               # Simple examples
+    ├── meta/                # Metaprogramming examples
+    └── ai/                  # AI collaboration examples
 ```
 
-### Key APIs:
-- `(ai-generate code-description)` - Generate DSL from natural language
-- `(update-source! new-code)` - Modify source file
-- `(travel-to! moment)` - Time travel to snapshot
-- `(explain-last-change)` - AI explains recent modification
-- `(suggest-improvement)` - AI suggests enhancements
+## Performance Strategy
 
-## Example Interaction Flow
+An important principle: **"Don't prematurely optimize, but remember that for high-performance graphics you might need to step outside the pure Lispiness occasionally."** This strategy follows their recommended evolution from interpreter to JIT to native compilation, while keeping performance-critical operations in Rust:
 
-```
-Human: "Create something that responds to music"
-AI: "I'll create an audio-reactive particle system. What mood?"
-Human: "Ethereal and flowing"
-AI: [Generates DSL code for particle system]
-    [Shows preview in 3D world]
-    "I've created flowing particles that respond to frequency bands. 
-     Would you like me to explain the behavior logic?"
-Human: "Make it more responsive to bass"
-AI: [Modifies code, highlighting changes]
-    "I've increased the bass frequency multiplier and added a 
-     resonance behavior. Watch this..."
-    [Demonstrates with music]
-Human: "Perfect! Now save this as a reusable pattern"
-AI: [Generates macro from interaction]
-    "I've created a macro called 'audio-reactive-flow' that you 
-     can parameterize. Should I add it to your pattern library?"
+From lang-design-review.md recommendations:
+
+1. **Start with bytecode + inline caches** - Simple and effective
+2. **Add trace recording for hot paths** - JIT when needed
+3. **Compile compute-heavy to GPU** - Leverage parallel hardware
+4. **Incremental GC with frame budget** - Maintain 60fps in XR
+
+```rust
+// Performance-critical in Rust
+fn hot_loop_example() {
+    // Matrix math, physics, etc in Rust
+}
+
+// Orchestration in XR-Lang  
+(defn update-world [dt]
+  (hot-loop-example)  ; Call into Rust
+  (update-behaviors dt))
 ```
 
-## 3D Asset Pipeline & Model Support
-
-This comprehensive 3D asset system implements universal format support inspired by the computer graphics industry's evolution toward interoperability. The system draws from modern 3D content creation pipelines used in film, gaming, and industrial design, while adding AI-enhanced processing capabilities.
-
-**Industry Context:**
-The 3D graphics industry has converged on several key formats: glTF for real-time applications, USD for complex scene composition (developed by Pixar), STL for 3D printing, and PLY for point cloud data. Each format serves specific use cases in the 3D content creation pipeline.
-
-**AI Enhancement:**
-By adding AI-powered analysis, optimization, and generation to traditional 3D pipelines, we implement what researchers call "AI-assisted content creation" - using machine learning to automate tedious tasks like retopology, LOD generation, and material inference.
-
-**Sources:**
-- Khronos Group glTF 2.0 Specification
-- Pixar's Universal Scene Description (USD) documentation
-- Point Cloud Library (PCL) research
-- AI-assisted 3D content creation research
-
-### Universal 3D Model Loading
-
-This system implements comprehensive support for industry-standard 3D formats, addressing the fragmentation problem in 3D content creation. The approach mirrors modern game engines like Unreal Engine and Unity, which support multiple formats to accommodate different workflows.
-
-**Format Coverage:**
-- **glTF/GLB**: The "JPEG of 3D" - Khronos Group's standard for real-time 3D
-- **OBJ**: Simple mesh format, widely supported across tools
-- **STL**: Standard for 3D printing and CAD applications
-- **PLY**: Point cloud format from Stanford, used in 3D scanning
-- **USD/USDC**: Pixar's format for complex scene composition
-
-**Sources:**
-- Khronos Group glTF ecosystem documentation
-- Autodesk and other major 3D software format specifications
-- 3D printing industry STL standards
+## Testing Strategy
 
 ```lisp
-; Native support for industry-standard 3D formats
-(defscene3d model-showcase
-  ; Direct loading of 3D models
-  (model robot "assets/robot.glb"
-    (position 0 0 0)
-    (scale 1 1 1)
-    (behavior articulated-rig))
-    
-  (model terrain "assets/landscape.obj"
-    (position 0 -10 0)
-    (material pbr-realistic))
-    
-  (model scan "assets/statue.ply"
-    (position 5 0 0)
-    (point-cloud-mode true)
-    (point-size 2.0))
-    
-  (model cad-part "assets/engine.stl"
-    (position -5 0 0)
-    (material metallic))
-    
-  (model scene-graph "assets/full-scene.usd"
-    (position 0 0 -10)
-    (preserve-hierarchy true)
-    (animation-clip "idle")))
+; Property-based testing for core systems
+(defproperty patch-idempotent
+  (forall [dsl patch]
+    (= (apply-patch dsl patch)
+       (apply-patch (apply-patch dsl patch) patch))))
+
+; Record/replay testing
+(deftest interaction-replay
+  (record-session "test-session"
+    (click-at [0 0])
+    (drag-to [5 5])
+    (press-key "Enter"))
+  (replay-and-verify "test-session"))
+
+; Doctests for all examples
+(defn factorial [n]
+  "Calculates factorial
+   (factorial 5) => 120"
+  (if (<= n 1) 1 (* n (factorial (dec n)))))
 ```
 
-### AI-Enhanced Model Pipeline
+## Risk Mitigation
 
-This pipeline implements cutting-edge AI techniques for 3D content processing, drawing from recent research in neural 3D reconstruction, automatic rigging, and material inference. The system addresses common bottlenecks in 3D content creation workflows.
+Specific pitfalls from Lisp/Smalltalk history that XR-Lang's design explicitly addresses:
 
-**AI Techniques Applied:**
-- **Automatic Retopology**: Using ML to reduce polygon count while preserving visual quality
-- **Skeleton Generation**: AI-powered automatic rigging for character animation
-- **Material Inference**: Computer vision techniques to analyze geometry and suggest appropriate materials
-- **LOD Generation**: Intelligent mesh simplification based on visual importance
+From lang-design-review.md:
 
-**Inspired by:**
-- Recent advances in neural 3D reconstruction (NeRF, 3D Gaussian Splatting)
-- Automatic rigging research from animation studios
-- Material capture and inference systems
+| Risk | Mitigation |
+|------|------------|
+| **Scope Creep** | Focus on thin vertical slice MVP |
+| **AI Overreach** | AI as proposal engine with human approval |
+| **Source Churn** | Semantic diffs + provenance tracking |
+| **Debug Hell** | Time machine + probes from day one |
+| **Performance** | Profile early, optimize hot paths to Rust |
 
-**Sources:**
-- NeRF and 3D Gaussian Splatting research papers
-- Automatic rigging research from SIGGRAPH conferences
-- Computer vision research on material classification
+## Success Metrics
 
-```lisp
-(defmacro ai-model-processor []
-  `(defbehavior model-intelligence
-     ; AI analyzes and enhances loaded models
-     (on-model-load (model-path)
-       (let* ((analysis (ai-analyze-3d-model model-path))
-              (suggestions (ai-suggest-optimizations analysis)))
-         
-         ; Auto-generate LODs
-         (when (:needs-lods analysis)
-           (generate-lod-chain model-path))
-         
-         ; AI-powered retopology
-         (when (:high-poly-count analysis)
-           (let ((optimized (ai-retopologize model-path)))
-             (suggest-replacement optimized)))
-         
-         ; Automatic rigging for animation
-         (when (and (:is-character analysis)
-                   (not (:has-skeleton analysis)))
-           (let ((auto-rig (ai-generate-skeleton model-path)))
-             (apply-auto-rig auto-rig)))
-         
-         ; Material inference
-         (when (:missing-materials analysis)
-           (let ((materials (ai-infer-materials-from-geometry)))
-             (apply-smart-materials materials)))))
-     
-     ; Real-time model generation from description
-     (on-voice "create a 3D model of *" (description)
-       (let* ((model-prompt (enhance-3d-prompt description))
-              (generated-model (ai-generate-3d-model model-prompt))
-              (format-options '(gltf obj usd stl ply)))
-         
-         ; Preview in world
-         (spawn-model-preview generated-model)
-         
-         ; Export options
-         (show-export-menu format-options)
-         
-         ; Save to source
-         (on-confirm (format)
-           (let ((path (export-model generated-model format)))
-             (update-source! `(model ,(gensym) ,path))))))))
-```
+### Technical Metrics
+- [ ] Hot reload < 100ms
+- [ ] Time travel to any point < 500ms  
+- [ ] AI suggestion generation < 2s
+- [ ] 60fps maintained in XR
 
-### Model Format Converters & Processors
+### User Experience Metrics
+- [ ] Time to first working scene < 5 minutes
+- [ ] Pattern detection accuracy > 80%
+- [ ] AI suggestion acceptance rate > 50%
+- [ ] Zero crashes in live sessions
 
-```lisp
-(defsystem model-pipeline
-  ; Universal loader with format detection
-  (defn load-any-model [path]
-    (case (detect-format path)
-      (:gltf (load-gltf path))
-      (:glb (load-glb path))
-      (:obj (load-obj-with-mtl path))
-      (:stl (load-stl-binary-or-ascii path))
-      (:ply (load-ply-with-colors path))
-      (:usd (load-usd-with-layers path))
-      (:usdc (load-usdc-compressed path))
-      (:fbx (convert-and-load-fbx path))
-      (:dae (load-collada path))
-      (:3ds (load-3ds-legacy path))))
-  
-  ; Smart format conversion
-  (defn convert-model [source-path target-format]
-    (let* ((source-data (load-any-model source-path))
-           (optimizer (get-optimizer target-format))
-           (optimized (optimize-for-format source-data target-format)))
-      
-      ; Format-specific optimizations
-      (case target-format
-        (:usd (add-usd-metadata optimized))
-        (:gltf (add-draco-compression optimized))
-        (:stl (triangulate-for-printing optimized))
-        (:ply (preserve-point-attributes optimized)))
-      
-      (export-model optimized target-format)))
-  
-  ; Procedural model generation from primitives
-  (defn generate-compound-model [description]
-    (let ((csg-tree (parse-csg-description description)))
-      (compile-to-mesh csg-tree))))
-```
+## Project Steps
 
-### Point Cloud & Photogrammetry Support
+### 1: Foundation
+1. Set up Rust project structure
+2. Implement basic value model
+3. Create simple S-expression parser
+4. Build minimal bytecode VM
+5. Test with trivial examples
 
-This system implements modern 3D reconstruction techniques, drawing from photogrammetry research and LiDAR data processing. The AI-powered point cloud to mesh conversion uses techniques from recent neural reconstruction research.
+### 2: Scene Integration  
+1. Add scene primitives to VM
+2. Implement hot-reload mechanism
+3. Add camera state preservation
+4. Create first .xrdsl examples
+5. Validate with real 3D scenes
 
-**Technical Approach:**
-- **Multi-format Support**: PLY, LAS (LiDAR), E57 (laser scanning), XYZ (ASCII points)
-- **Neural Reconstruction**: AI-powered surface inference from sparse point data
-- **Real-time Processing**: Streaming photogrammetry for interactive reconstruction
+### 3: Homoiconic Bootstrap
+1. Write evaluator in XR-Lang
+2. Implement quote/unquote
+3. Add macro system basics
+4. Test self-hosting capability
+5. Benchmark performance
 
-**Inspired by:**
-- Modern photogrammetry software like RealityCapture and Metashape
-- Neural Radiance Fields (NeRF) and related reconstruction techniques
-- Real-time SLAM (Simultaneous Localization and Mapping) systems
+### 4: Live Environment
+1. Build 3D inspector UI
+2. Add probe system
+3. Implement time-travel UI
+4. Create REPL in 3D
+5. User testing session
 
-**Sources:**
-- Photogrammetry and remote sensing research literature
-- NeRF and neural reconstruction research
-- Point Cloud Library documentation and research
+## Conclusion
 
-```lisp
-(defmacro point-cloud-system []
-  `(defsystem point-clouds
-     ; Load and visualize point clouds
-     (defn load-point-cloud [path]
-       (case (detect-point-format path)
-         (:ply (load-ply-points path))
-         (:las (load-lidar-data path))
-         (:e57 (load-e57-scan path))
-         (:xyz (load-ascii-points path))))
-     
-     ; AI-powered point cloud to mesh
-     (defn points-to-mesh [point-cloud]
-       (let* ((ai-reconstruction (ai-infer-surface point-cloud))
-              (mesh (poisson-reconstruction ai-reconstruction))
-              (textured (ai-generate-texture-from-colors mesh point-cloud)))
-         textured))
-     
-     ; Real-time photogrammetry
-     (behavior photogrammetry-capture
-       (state (captures [])
-              (point-cloud nil))
-       
-       (on-key "C"
-         (capture-frame! captures (get-camera)))
-       
-       (on-key "P"
-         (let ((cloud (process-photogrammetry captures)))
-           (set! point-cloud cloud)
-           (visualize-points cloud)))
-       
-       (on-key "M"
-         (when point-cloud
-           (let ((mesh (points-to-mesh point-cloud)))
-             (spawn-mesh mesh)
-             (export-option mesh)))))))
-```
+XR-Lang synthesizes **50 years of programming language research** with **modern AI capabilities** to create something unprecedented: a programming environment that is simultaneously:
 
-### USD/Hydra Integration for Complex Scenes
+- **A 3D world** (XR-native, but since we want it to be cross-platform, it will support running without hand interactions extension in win/linux/macos or browsers throuhg WASM, leveraging WebGPU everywhere)
+- **A conversation partner** (AI-integrated)
+- **A learning system** (persistent memory)
+- **A creative medium** (self-modifying)
 
-This system implements Pixar's Universal Scene Description (USD) standard, which has become the industry standard for complex 3D scene composition in film and animation. USD's layered composition system enables non-destructive editing and collaborative workflows.
+By following this structured implementation plan, grounded in proven language design principles while embracing cutting-edge capabilities, we can realize Alan Kay's vision of the **meta-medium** - a medium that can become any other medium, where the boundary between thinking and doing dissolves.
 
-**USD Benefits:**
-- **Layer-based Composition**: Non-destructive editing through layer stacks
-- **Collaborative Workflows**: Multiple artists can work on different aspects simultaneously
-- **Massive Scene Support**: Designed for feature film complexity
-- **Hydra Rendering**: Pluggable rendering architecture
-
-**Industry Adoption:**
-USD has been adopted by major studios (Disney, DreamWorks, Sony Pictures) and is becoming standard in real-time engines (Unreal Engine, Unity, NVIDIA Omniverse).
-
-**Sources:**
-- Pixar's USD documentation and research papers
-- NVIDIA Omniverse USD implementation
-- Industry case studies from major animation studios
-
-```lisp
-(defsystem usd-pipeline
-  ; Full USD scene graph support
-  (defn load-usd-scene [path]
-    (let* ((stage (open-usd-stage path))
-           (prims (traverse-stage stage))
-           (materials (extract-materials stage))
-           (animations (extract-animations stage)))
-      
-      ; Convert to internal scene graph
-      (build-scene-graph prims materials animations)))
-  
-  ; Live USD editing
-  (behavior usd-editor
-    (on-modify (object)
-      (let ((usd-prim (get-usd-prim object)))
-        ; Write changes back to USD
-        (update-usd-attribute usd-prim (get-transform object))
-        
-        ; Maintain USD layer stack
-        (add-to-edit-layer (current-changes)))))
-  
-  ; AI-assisted USD composition
-  (defn ai-compose-usd-scene [description]
-    (let* ((scene-structure (ai-parse-scene-description description))
-           (asset-library (scan-usd-assets))
-           (composition (ai-compose-from-library scene-structure asset-library)))
-      
-      ; Generate USD with proper referencing
-      (create-usd-with-references composition))))
-```
-
-### 3D Model Streaming & LOD System
-
-```lisp
-(defsystem model-streaming
-  ; Progressive loading for large models
-  (defn stream-large-model [url]
-    (let ((loader (create-progressive-loader url)))
-      ; Load low-res first
-      (load-lod loader 0)
-      
-      ; Stream higher detail based on distance
-      (on-frame (dt)
-        (let ((distance (camera-distance-to-model)))
-          (when (< distance (lod-threshold))
-            (stream-next-lod loader))))))
-  
-  ; Automatic LOD generation
-  (defn generate-lods [model]
-    (let ((lod-chain []))
-      (for [level (range 5)]
-        (let ((simplified (simplify-mesh model (lod-ratio level))))
-          (push! lod-chain simplified)))
-      lod-chain))
-  
-  ; AI-powered LOD optimization
-  (defn ai-optimize-lods [model]
-    (let* ((importance-map (ai-analyze-visual-importance model))
-           (lods (ai-generate-smart-lods model importance-map)))
-      lods)))
-```
-
-### CAD & Engineering Format Support
-
-```lisp
-(defsystem cad-pipeline
-  ; STL for 3D printing
-  (defn prepare-for-printing [model]
-    (let* ((watertight (make-watertight model))
-           (supported (add-support-structures watertight))
-           (sliced (generate-slices supported)))
-      (export-stl sliced)))
-  
-  ; STEP/IGES import (via conversion)
-  (defn import-cad [path]
-    (let ((format (detect-cad-format path)))
-      (case format
-        (:step (convert-step-to-mesh path))
-        (:iges (convert-iges-to-mesh path))
-        (:stl (load-stl-direct path)))))
-  
-  ; Parametric modeling integration
-  (defn parametric-to-mesh [parameters]
-    (let ((cad-model (generate-parametric-model parameters)))
-      (tessellate-cad cad-model))))
-```
-
-### Model Analysis & Optimization
-
-```lisp
-(defmacro model-analyzer []
-  `(defsystem analysis
-     ; Comprehensive model analysis
-     (defn analyze-model [model]
-       {:poly-count (count-polygons model)
-        :vertex-count (count-vertices model)
-        :material-count (count-materials model)
-        :texture-memory (calculate-texture-memory model)
-        :bounding-box (calculate-bounds model)
-        :manifold (is-manifold? model)
-        :uv-coverage (analyze-uv-usage model)
-        :animation-data (analyze-animations model)})
-     
-     ; AI-powered optimization suggestions
-     (defn ai-optimize-model [model analysis]
-       (let ((suggestions []))
-         ; Topology optimization
-         (when (> (:poly-count analysis) 100000)
-           (push! suggestions (ai-suggest-retopology model)))
-         
-         ; Texture optimization
-         (when (> (:texture-memory analysis) (* 100 1024 1024))
-           (push! suggestions (ai-suggest-texture-compression model)))
-         
-         ; UV optimization
-         (when (< (:uv-coverage analysis) 0.7)
-           (push! suggestions (ai-suggest-uv-repack model)))
-         
-         suggestions))))
-```
-
-## Key Innovations
-
-### 1. **AI as Co-Creator**: Not just a tool, but a collaborative partner
-**Foundation**: Extends GitHub Copilot's vision of AI pair programming to true collaborative intelligence where "humans and computers working side by side can blow away the achievements of people or machines alone."
-
-### 2. **Conversational Metaprogramming**: Natural language drives system evolution
-**Foundation**: Combines Lisp's homoiconic metaprogramming with modern conversational AI, enabling what current systems can't achieve: natural language that directly generates and modifies running code structures.
-
-### 3. **Explainable Everything**: Every AI action can be understood and questioned
-**Foundation**: Addresses the "black box" problem in AI systems by implementing explainable AI (XAI) principles at the meta-programming level, ensuring human understanding and control.
-
-### 4. **Living Memory**: System remembers and learns across sessions
-**Foundation**: Implements persistent memory systems inspired by cognitive science research, addressing current AI limitations where "each interaction starts fresh."
-
-### 5. **Multimodal Synthesis**: Voice, video, code, and 3D seamlessly integrated
-**Foundation**: Realizes Alan Kay's vision of computing as a "meta-medium that could incorporate all other media," using modern multimodal AI capabilities.
-
-### 6. **Time as First-Class**: Navigate, branch, and understand causality
-**Foundation**: Extends Smalltalk's image-based development with temporal navigation, making time itself a programmable dimension of the development experience.
-
-### 7. **Symbiotic Evolution**: Human creativity + AI capabilities = emergent innovation
-**Foundation**: Implements J.C.R. Licklider's "Man-Computer Symbiosis" vision through interactive evolution where "human intuition and machine computation synergize."
-
-### 8. **Universal 3D Asset Support**: Native loading of STL, PLY, OBJ, USD/USDC, glTF/GLB formats
-**Foundation**: Addresses 3D content creation pipeline fragmentation by supporting all major industry formats, from 3D printing (STL) to film production (USD).
-
-### 9. **AI-Enhanced Model Pipeline**: Automatic optimization, rigging, and material inference
-**Foundation**: Applies cutting-edge AI research in neural 3D reconstruction, automatic rigging, and material inference to streamline 3D content creation workflows.
-
-### 10. **Point Cloud & Photogrammetry**: Real-time reconstruction and mesh generation
-**Foundation**: Integrates modern 3D reconstruction techniques (NeRF, photogrammetry) with AI-powered mesh generation for seamless reality-to-virtual workflows.
-
-## Key Benefits
-
-### 1. **Living Documentation**: Code becomes self-documenting through interaction
-**Realization**: Implements Bret Victor's "Show the Data" principle - instead of static documentation, the system visualizes runtime behavior, making code self-explanatory through interaction.
-
-### 2. **Exploratory Programming**: Discover patterns by doing, not planning
-**Realization**: Enables what Victor calls "Dynamic behavior, not static structure" - understanding emerges through manipulation rather than static analysis.
-
-### 3. **Emergent Complexity**: Simple interactions generate sophisticated behaviors
-**Realization**: Leverages the power of homoiconic metaprogramming where "simple transformations of programs" can be expressed "in a concise way," leading to complex emergent behaviors.
-
-### 4. **Learning System**: The environment improves through use
-**Realization**: Implements persistent learning across sessions, addressing what current AI systems lack: the ability to build on previous collaborative experiences.
-
-### 5. **Creative Coding**: Blur the line between using and programming
-**Realization**: Achieves Kay's vision where "the boundary between thinking and doing, between idea and implementation, becomes fluid and natural."
-
-## UI/UX Considerations
-
-- 🔴 Recording indicator when in sync mode
-- 📌 Pin icon to lock/preserve specific values  
-- 🔄 Sync status in status bar
-- Toggle keys: `[M]` for mode, `[P]` to preserve current view
-
-## Implementation Path Recommendations
-
-1. **Start Simple**: Implement camera position preservation only
-2. **Add Opt-in**: Add `(meta preserve)` directive
-3. **Extend Gradually**: Add more sophisticated policies
-4. **Monitor Usage**: Learn from user patterns
-5. **Refine UX**: Adjust based on feedback
+> "The best way to predict the future is to invent it. We are inventing a future where programming is a conversation with reality itself." — The XR-Lang Vision
 
 ---
 
-## Conclusion: Realizing the Meta-Medium Vision
+*"Simple things should be simple, complex things should be possible."* — Alan Kay
 
-This creates an **optimal human-machine symbiosis** where AI augments creativity rather than replacing it, enabling exploration and evolution of 3D worlds through natural interaction and conversation. The system embodies Alan Kay's vision of computing as "an amplifier for human imagination," where "the boundary between thinking and doing, between idea and implementation, becomes fluid and natural."
-
-### Synthesis of Research Traditions
-
-Our approach synthesizes several foundational research traditions:
-
-- **Homoiconic Metaprogramming** (Lisp tradition): Code as data, enabling powerful runtime transformation
-- **Personal Dynamic Media** (Kay/Smalltalk): Computing as a universal medium that can become any other medium
-- **Learnable Programming** (Victor): Making the invisible visible through immediate feedback and data visualization
-- **Human-AI Symbiosis** (Modern AI research): True collaboration rather than mere assistance
-- **3D Content Creation Pipeline** (Graphics industry): Universal format support and AI-enhanced processing
-
-By combining these traditions, we create something unprecedented: a programming environment that is simultaneously a 3D world, a conversation partner, a learning system, and a creative medium.
-
-### Sources and Further Reading
-
-**Foundational Papers:**
-- Kay, A. & Goldberg, A. (1977). "Personal Dynamic Media." *Computer*, 10(3), 31-41.
-- Licklider, J.C.R. (1960). "Man-Computer Symbiosis." *IRE Transactions*.
-- Victor, B. "Learnable Programming." https://worrydream.com/LearnableProgramming/
-- Alexander, C. (1977). "A Pattern Language: Towns, Buildings, Construction." Oxford University Press.
-
-**Technical References:**
-- Wikipedia: Homoiconicity, Metaprogramming, Self-modifying code
-- GitHub Research on AI pair programming and collaborative intelligence
-- Computer graphics industry standards (glTF, USD, STL specifications)
-- AI research on neural 3D reconstruction and multimodal interaction
-
-**Live Programming History:**
-- https://liveprogramming.github.io/liveblog/2013/01/a-history-of-live-programming/
-- Smalltalk and Lisp environment documentation
-- Modern hot-reload and live coding tools research
+This is our north star: making the simple act of creation in 3D as natural as thought, while enabling complexity limited only by imagination.

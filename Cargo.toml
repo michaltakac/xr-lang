@@ -10,7 +10,7 @@ members = [
     "cv",
     "testing",
     "app-hosts/desktop",
-    # "app-hosts/quest",  # Excluded by default - build with --package quest when targeting Android
+    "app-hosts/quest",
     "app-hosts/web"
 ]
 resolver = "2"
@@ -65,7 +65,6 @@ openxr = "0.18"
 # Android (only used when building for Android)
 # These are workspace-level dependencies but only actually used by the quest app
 ndk = "0.8"
-ndk-glue = { version = "0.7", features = ["logger"] }
 
 # Hash for caching
 twox-hash = "1.6"
