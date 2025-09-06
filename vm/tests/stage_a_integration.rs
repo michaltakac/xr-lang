@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod stage_a_tests {
     use vm::parser::{parse, parse_one};
-    use vm::bytecode::{VM, OpCode};
+    use vm::bytecode::{VM, OpCode, ByteCode};
     use vm::value::Value;
     use vm::persistence::{PersistenceLayer, Author, Change, ValuePath};
     use vm::intrinsics::{intrinsic_create_cube, intrinsic_update_transform};
@@ -76,11 +76,11 @@ mod stage_a_tests {
         
         // Simple arithmetic program
         let code = vec![
-            OpCode::Push(Value::Int(10)),
-            OpCode::Push(Value::Int(5)),
-            OpCode::Add,
-            OpCode::Push(Value::Int(3)),
-            OpCode::Mul,
+            ByteCode { op: OpCode::Push(Value::Int(10)), line: 1, column: 1 },
+            ByteCode { op: OpCode::Push(Value::Int(5)), line: 1, column: 3 },
+            ByteCode { op: OpCode::Add, line: 1, column: 5 },
+            ByteCode { op: OpCode::Push(Value::Int(3)), line: 1, column: 7 },
+            ByteCode { op: OpCode::Mul, line: 1, column: 9 },
         ];
         
         let result = vm.execute(code, None).unwrap();

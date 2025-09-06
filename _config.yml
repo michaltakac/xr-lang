@@ -1,0 +1,33 @@
+# GitHub Pages configuration for XR-Lang blog
+title: XR-Lang
+description: A Meta-Medium for Explorable Programming in Extended Reality
+author: XR-Lang Project
+
+# Build settings
+markdown: kramdown
+theme: null  # We're using custom CSS
+
+# Site settings
+url: "https://xr-lang.dev"  # Replace with your custom domain
+baseurl: ""
+
+# Exclude files from build
+exclude:
+  - README.md
+  - LICENSE
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - .gitignore
+  - node_modules
+  - package.json
+  - package-lock.json
+
+# Include the blog folder
+include:
+  - blog
+
+# Plugins (if needed)
+plugins:
+  - jekyll-sitemap
+  - jekyll-seo-tag

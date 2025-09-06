@@ -182,9 +182,12 @@ Following the principle of **"implement the minimal low-level substrate in Rust"
 **Key Design Principles for 3D Model Support:**
 
 - **Separation of Concerns**: Model loading functionality lives in the runtime library/engine rather than the language parser or core VM
-- **Standard Format Support**: Primary support for **glTF 2.0** ("the JPEG of 3D") - optimized for runtime loading with efficient binary format (.glb), rich features (PBR materials, skeletal animations, morph targets)
+- **Dual Format Strategy**: 
+  - **glTF 2.0** ("the JPEG of 3D") for runtime efficiency - optimized binary format (.glb), web-friendly, widespread support
+  - **USD/USDZ** ("the HTML of the metaverse") for professional workflows - industry standard backed by Pixar, NVIDIA, Apple, and the Alliance for OpenUSD (AOUSD), supporting complex scene composition, non-destructive layering, and XR/metaverse applications
 - **Live Hot-Swappable Models**: Enable editing and swapping 3D assets during runtime without restarting the environment
-- **Animation Primitives**: Expose embedded animations (skeletal, morph targets) as first-class entities that can be played, paused, sought, or blended
+- **Animation Primitives**: Expose embedded animations (skeletal, morph targets, USD time samples) as first-class entities that can be played, paused, sought, or blended
+- **Scene Composition**: Leverage USD's powerful layering system for non-destructive scene editing and variant management
 
 ```rust
 // Expose to XR-Lang as built-in functions
@@ -194,13 +197,18 @@ fn intrinsic_update_transform(id: EntityId, transform: Transform) { ... }
 
 // 3D Model loading via engine bridge
 fn intrinsic_load_model(path: &str) -> Result<Model> { 
-    // Delegates to engine's glTF loader
-    // Returns live object handle
+    // Auto-detects format: glTF/GLB for runtime, USD/USDZ for pro workflows
+    // Returns live object handle with format-specific capabilities
+}
+fn intrinsic_load_usd_stage(path: &str) -> Result<UsdStage> {
+    // Load USD stage with full composition engine
+    // Supports layers, variants, and references
 }
 fn intrinsic_update_model(id: ModelId, path: &str) -> Result<()> {
     // Hot-swap model at runtime
 }
 fn intrinsic_play_animation(model: ModelId, name: &str) { ... }
+fn intrinsic_apply_usd_layer(stage: UsdStageId, layer_path: &str) { ... }
 ```
 
 This approach provides several advantages:
@@ -804,7 +812,7 @@ Following the principle to **"implement the minimal low-level substrate in Rust 
 
 ### 3D Model Loading Architecture
 
-The 3D model loading system follows a **bridge pattern** that decouples the language from specific 3D APIs:
+The 3D model loading system follows a **bridge pattern** that decouples the language from specific 3D APIs, supporting both **glTF** for runtime efficiency and **USD** for professional workflows:
 
 ```lisp
 ; High-level XR-Lang API for models
@@ -815,25 +823,70 @@ The 3D model loading system follows a **bridge pattern** that decouples the lang
   (get-nodes [model])
   (find-node [model name]))
 
-; Implementation delegates to engine
-(defn load-gltf [path & {:keys [hot-reload auto-play]}]
-  (let [model (engine/load-model path)
-        animations (engine/get-animations model)]
-    {:model model
+; USD-specific protocol for advanced composition
+(defprotocol UsdComposer
+  (load-stage [path])
+  (add-layer [stage layer-path strength])
+  (set-variant [stage prim-path variant-name])
+  (get-prims [stage])
+  (compose-scene [stage time]))
+
+; Implementation delegates to engine - format auto-detection
+(defn load-model [path & {:keys [hot-reload format]}]
+  (let [format (or format (detect-format path))]
+    (case format
+      :gltf (load-gltf path :hot-reload hot-reload)
+      :usd (load-usd-stage path :hot-reload hot-reload)
+      :usdz (load-usdz-archive path :hot-reload hot-reload))))
+
+; glTF loader - optimized for runtime
+(defn load-gltf [path & opts]
+  (let [model (engine/load-gltf path)
+        animations (engine/get-gltf-animations model)]
+    {:format :gltf
+     :model model
      :animations animations
      :nodes (build-node-map model)
-     :hot-reload hot-reload
-     :watcher (when hot-reload
+     :hot-reload (:hot-reload opts)
+     :watcher (when (:hot-reload opts)
                 (watch-file path #(reload-model model %)))}))
 
-; Live introspection and manipulation
+; USD loader - full composition support
+(defn load-usd-stage [path & opts]
+  (let [stage (engine/open-usd-stage path)]
+    {:format :usd
+     :stage stage
+     :prims (get-stage-prims stage)
+     :layers (get-composition-layers stage)
+     :variants (extract-variant-sets stage)
+     :time-samples (get-time-sample-range stage)
+     :hot-reload (:hot-reload opts)}))
+
+; Live introspection works for both formats
 (defn inspect-model [model]
   (spawn-inspector
-    {:nodes (get-all-nodes model)
-     :materials (get-materials model)
-     :animations (get-animation-clips model)
-     :stats {:vertices (count-vertices model)
-             :triangles (count-triangles model)}}))
+    (merge
+      {:nodes (get-all-nodes model)
+       :materials (get-materials model)
+       :animations (get-animation-clips model)
+       :stats {:vertices (count-vertices model)
+               :triangles (count-triangles model)}}
+      ; USD-specific introspection
+      (when (= (:format model) :usd)
+        {:layers (get-layers (:stage model))
+         :variants (get-variant-sets (:stage model))
+         :composition-arcs (analyze-composition (:stage model))}))))
+
+; USD Scene Composition - leveraging layering system
+(defn compose-usd-scene [base-stage & overlays]
+  (reduce (fn [stage overlay]
+            (case (:type overlay)
+              :layer (add-sublayer stage (:path overlay) (:strength overlay))
+              :variant (set-variant-selection stage (:prim overlay) (:variant overlay))
+              :reference (add-reference stage (:prim overlay) (:ref-path overlay))
+              :payload (add-payload stage (:prim overlay) (:payload-path overlay))))
+          base-stage
+          overlays))
 ```
 
 ## Code Examples & Patterns
@@ -1097,6 +1150,98 @@ Showing how the language provides **deep access to model internals** for fine-gr
           modified-keyframes)))))
 ```
 
+### Example 8: USD Scene Composition and Layering
+
+Demonstrating **USD's powerful composition engine** for non-destructive scene assembly and variant management - the foundation for metaverse content:
+
+```lisp
+(defscene3d usd-composition-workspace
+  ; Load base USD stage (like Pixar uses in production)
+  (stage main-stage
+    :path "assets/environments/city.usd"
+    :purpose :base)
+  
+  ; Layer multiple USD files non-destructively
+  (layer lighting-override
+    :target main-stage
+    :path "assets/overrides/night-lighting.usd"
+    :strength 0.8)  ; Blend strength
+  
+  ; Variant sets for different configurations
+  (variant-switcher
+    :stage main-stage
+    :variants {:season ["summer" "winter" "fall"]
+               :time-of-day ["dawn" "noon" "dusk" "night"]
+               :weather ["clear" "rainy" "foggy"]}
+    :current {:season "summer" :time-of-day "noon" :weather "clear"})
+  
+  ; Reference external USD assets (like NVIDIA Omniverse)
+  (reference character
+    :stage main-stage
+    :prim-path "/World/Characters/Hero"
+    :asset-path "assets/characters/hero.usdz"
+    :variants {:costume "armor"})
+  
+  ; Payload for deferred loading of heavy assets
+  (payload city-details
+    :stage main-stage
+    :prim-path "/World/CityDetails"
+    :asset-path "assets/environments/city-highres.usd"
+    :load-on-demand true))
+
+; Live USD composition manipulation
+(defn modify-usd-composition [stage]
+  ; Add opinion layer for live edits
+  (let [session-layer (create-session-layer stage)]
+    ; Make live changes that don't affect source files
+    (with-edit-target session-layer
+      (set-attribute "/World/Lights/Sun" :intensity 2.0)
+      (transform-prim "/World/Characters/Hero" :translate [10 0 5]))
+    
+    ; Switch variants programmatically
+    (set-variant-selection stage "/World" "season" "winter")
+    
+    ; Save composition as new USD file
+    (export-flattened stage "output/composed-scene.usd")))
+
+; MaterialX integration (Apple Vision Pro style)
+(defn create-materialx-shader [stage]
+  (let [shader-graph (create-shader-graph)]
+    ; Build MaterialX nodes (as used in Reality Composer Pro)
+    (-> shader-graph
+        (add-node :image-texture {:file "textures/metal.jpg"})
+        (add-node :normal-map {:file "textures/metal-normal.jpg"})
+        (add-node :pbr-surface {:metallic 0.9 :roughness 0.2})
+        (connect :image-texture :out :pbr-surface :base-color)
+        (connect :normal-map :out :pbr-surface :normal))
+    
+    ; Embed MaterialX in USD
+    (add-materialx-to-usd stage shader-graph "/Materials/CustomMetal")))
+
+; Time-sampled animation in USD
+(defn animate-usd-properties [stage prim-path]
+  ; USD supports time-sampled values natively
+  (for [frame (range 0 240)]  ; 10 seconds at 24fps
+    (let [time (* frame (/ 1.0 24.0))
+          rotation (* frame 1.5)]
+      (set-time-sample stage prim-path :rotation [0 rotation 0] time)))
+  
+  ; Query animation at specific time
+  (get-value-at-time stage prim-path :rotation 5.0))
+
+; Cross-platform XR deployment (leveraging USDZ for AR)
+(defn export-for-xr [stage target-platform]
+  (case target-platform
+    :vision-pro (export-usdz stage "output/scene.usdz" 
+                           {:include-preview true
+                            :optimize-for-ar true})
+    :web (export-gltf-from-usd stage "output/scene.glb"
+                              {:draco-compression true})
+    :omniverse (export-usd stage "output/scene.usd"
+                          {:flatten false
+                           :include-mdl-shaders true})))
+```
+
 ## Minimal Viable Product (MVP)
 
 From lang-design-review.md, the 8 features that prove the thesis:
@@ -1176,6 +1321,64 @@ From lang-design-review.md, the 8 features that prove the thesis:
 - [Live Programming History](https://liveprogramming.github.io/liveblog/2013/01/a-history-of-live-programming/)
 - [GitHub: awesome-live-reloading](https://github.com/hasura/awesome-live-reloading)
 
+## Cross-Platform Architecture: One Image, Many Worlds
+
+XR-Lang follows the **Smalltalk tradition of portable images** - a single bytecode image (`xr-lang.img`) runs unchanged across all XR platforms, from Meta Quest to Apple Vision Pro to web browsers. This approach ensures **write once, run anywhere** while maintaining native performance through platform-specific host layers.
+
+### The Three-Layer Architecture
+
+```mermaid
+graph TB
+    subgraph "Portable Image Layer"
+        IMG[xr-lang.img]
+        BC[Bytecode]
+        HEAP[Live Objects]
+        JOURNAL[Event Journal]
+    end
+    
+    subgraph "VM Layer (Rust)"
+        VM[Bytecode VM]
+        GC[Incremental GC]
+        CAPS[Capability Table]
+        JIT[Trace JIT]
+    end
+    
+    subgraph "Host Layer (Platform-Specific)"
+        QUEST[Quest Host<br/>OpenXR + Vulkan]
+        VISION[Vision Pro Host<br/>RealityKit + Metal]
+        WEB[Web Host<br/>WebXR + WebGPU]
+        XREAL[XREAL Host<br/>SDK + OpenGL ES]
+    end
+    
+    IMG --> VM
+    VM --> QUEST
+    VM --> VISION
+    VM --> WEB
+    VM --> XREAL
+```
+
+### Supported Platforms & Targets
+
+| Platform | XR API | Graphics | Build Target | Store |
+|----------|--------|----------|--------------|-------|
+| **Meta Quest 3/3S** | OpenXR 1.0 | Vulkan via wgpu | arm64-v8a APK | Meta Store/App Lab |
+| **Android XR** | OpenXR 1.1 | Vulkan via wgpu | arm64-v8a APK | Play Store |
+| **Apple Vision Pro** | RealityKit/ARKit | Metal via wgpu | Universal Binary | App Store |
+| **XREAL Air 2/One Pro** | XREAL SDK 3.x / WebXR | OpenGL ES / WebGPU | APK or Web | XREAL Store / Web |
+| **Web Browsers** | WebXR Device API | WebGPU | WASM | Progressive Web App |
+| **Desktop VR** | OpenXR/OpenVR | Vulkan/D3D12/Metal | Native Binary | Steam/Standalone |
+
+### Platform-Agnostic Features
+
+All platforms support these core XR-Lang features through the capability system:
+- **Hot-reload** of code and 3D assets without restart
+- **Time-travel debugging** with visual feedback
+- **Live object inspection** in 3D space
+- **AI-assisted programming** (when network capability granted)
+- **USD/glTF model loading** with format auto-detection
+- **Hand tracking & controllers** (mapped to unified action system)
+- **Spatial anchors & persistence** (platform-specific backends)
+
 ## Project Structure
 
 ```
@@ -1184,14 +1387,25 @@ xr-lang/
 │   ├── vm/
 │   │   ├── bytecode.rs       # Bytecode interpreter
 │   │   ├── memory.rs         # GC/memory management
-│   │   └── scheduler.rs      # Green threads/fibers
+│   │   ├── scheduler.rs      # Green threads/fibers
+│   │   └── jit.rs           # Trace-based JIT compiler
 │   ├── runtime/
 │   │   ├── ffi.rs           # Foreign functions
 │   │   ├── capabilities.rs   # Security model
 │   │   └── intrinsics.rs    # Built-in functions
-│   └── persistence/
-│       ├── journal.rs        # Event sourcing
-│       └── snapshot.rs       # State snapshots
+│   ├── persistence/
+│   │   ├── journal.rs        # Event sourcing
+│   │   └── snapshot.rs       # State snapshots
+│   ├── renderer/
+│   │   ├── wgpu_backend.rs  # Cross-platform GPU abstraction
+│   │   ├── pipeline.rs      # Shader compilation (WGSL → SPIR-V/MSL/HLSL)
+│   │   └── scene_graph.rs   # ECS → GPU command buffer
+│   └── hosts/
+│       ├── common/           # Shared host utilities
+│       ├── openxr/          # Quest/Android XR/Desktop VR
+│       ├── visionos/        # Apple Vision Pro (Swift FFI)
+│       ├── webxr/           # Web browsers (WASM)
+│       └── xreal/           # XREAL glasses (JNI)
 │
 ├── xr-lang/                   # ~70% of codebase
 │   ├── core/
@@ -1211,15 +1425,434 @@ xr-lang/
 │       ├── patterns.xrl     # Pattern learning
 │       └── evolution.xrl    # Genetic programming
 │
+├── image-builder/             # Image compilation toolchain
+│   ├── src/
+│   │   ├── compiler.rs      # DSL → Bytecode
+│   │   ├── packager.rs      # Resource bundling
+│   │   └── optimizer.rs     # Bytecode optimization
+│   └── targets/
+│       ├── dev.toml         # Development image config
+│       └── ship.toml        # Production image config
+│
 ├── assets/
-│   ├── models/              # 3D models (primarily glTF/GLB, with conversion pipeline for OBJ/FBX/USD)
-│   ├── shaders/             # WGSL shaders
-│   └── animations/          # Reusable animation clips
+│   ├── models/              # 3D models (glTF/GLB for runtime, USD/USDZ for professional workflows)
+│   ├── shaders/             # WGSL shaders and MaterialX graphs
+│   ├── animations/          # Reusable animation clips
+│   └── usd-layers/          # USD composition layers and overrides
+│
+├── apps/                      # Platform-specific hosts
+│   ├── quest/               # Meta Quest APK
+│   ├── android-xr/          # Android XR APK
+│   ├── visionos/            # Xcode project
+│   ├── web/                 # WASM + JS glue
+│   └── desktop/             # Development host
 │
 └── examples/
     ├── basic/               # Simple examples
     ├── meta/                # Metaprogramming examples
     └── ai/                  # AI collaboration examples
+```
+
+## The Portable Image Format
+
+Following Smalltalk's image-based development philosophy, XR-Lang compiles to a **portable bytecode image** that contains:
+
+```rust
+// Image structure (platform-independent)
+struct XRLangImage {
+    header: ImageHeader {
+        magic: [u8; 8],        // b"XRLANG\0\1"
+        version: u16,          // Format version
+        endianness: u8,        // 0=LE, 1=BE
+        features: u32,         // Required capabilities
+    },
+    
+    // Code & Data
+    atoms: AtomTable,          // Interned symbols/keywords
+    code: CodeSegments,        // Bytecode + debug info
+    heap: ObjectGraph,         // Live objects (ECS world, closures)
+    
+    // Resources (late-bound)
+    resources: ResourceTable {
+        shaders: Map<Symbol, ShaderDescriptor>,
+        models: Map<Symbol, ModelDescriptor>,
+        textures: Map<Symbol, TextureDescriptor>,
+    },
+    
+    // Persistence
+    journal: EventJournal,     // Event-sourced history
+    checkpoints: Vec<Snapshot>, // Time-travel points
+    
+    // Entry points
+    boot_table: BootTable {
+        on_boot: BytecodeAddr,
+        main_scene: BytecodeAddr,
+        repl: Option<BytecodeAddr>,
+        inspector: Option<BytecodeAddr>,
+    }
+}
+```
+
+### Capability-Based Platform Abstraction
+
+Instead of platform-specific code in the image, XR-Lang uses a **capability table** that hosts fill at runtime:
+
+```rust
+pub struct CapabilityTable {
+    // Graphics (wgpu abstracts Vulkan/Metal/D3D12/WebGPU)
+    gfx: GraphicsCapabilities {
+        create_pipeline: fn(ShaderSource) -> Pipeline,
+        draw_mesh: fn(Mesh, Transform, Material),
+        present_frame: fn(Views, Layers),
+    },
+    
+    // XR (unified interface over OpenXR/WebXR/RealityKit)
+    xr: Option<XRCapabilities> {
+        get_views: fn() -> Vec<ViewMatrix>,
+        get_controller_pose: fn(Hand) -> Transform,
+        get_hand_joints: fn(Hand) -> HandSkeleton,
+        create_spatial_anchor: fn(Transform) -> Anchor,
+        enable_passthrough: fn(bool),
+    },
+    
+    // Platform services
+    fs: FileSystemCapabilities,     // Asset loading
+    net: Option<NetworkCapabilities>, // Multiplayer/AI
+    time: TimeCapabilities,          // Frame timing
+    audio: AudioCapabilities,        // Spatial audio
+}
+```
+
+## Platform-Specific Hosts
+
+### Meta Quest 3/3S & Android XR
+
+```rust
+// apps/quest/src/lib.rs
+pub struct QuestHost {
+    openxr: OpenXrInstance,
+    vulkan: VulkanDevice,
+    wgpu: wgpu::Device,
+}
+
+impl QuestHost {
+    pub fn boot(image: &[u8]) -> Result<()> {
+        // Initialize OpenXR with Android loader
+        let openxr = openxr::Entry::linked()
+            .create_instance(&openxr::ApplicationInfo {
+                application_name: "XR-Lang",
+                application_version: 1,
+                engine_name: "XR-Lang VM",
+                engine_version: 1,
+            })?;
+        
+        // Create Vulkan device compatible with wgpu
+        let vulkan = create_vulkan_for_openxr(&openxr)?;
+        let wgpu = wgpu::Device::from_vulkan(vulkan)?;
+        
+        // Fill capability table
+        let caps = CapabilityTable {
+            gfx: GraphicsCapabilities::from_wgpu(wgpu),
+            xr: Some(XRCapabilities::from_openxr(openxr)),
+            // ...
+        };
+        
+        // Boot VM with image
+        let vm = Vm::boot(image, caps)?;
+        
+        // Main loop
+        loop {
+            let frame = openxr.wait_frame()?;
+            let views = openxr.locate_views(frame.time)?;
+            vm.tick(frame.dt)?;
+            vm.render(views)?;
+            openxr.end_frame(frame)?;
+        }
+    }
+}
+```
+
+**Build for Quest:**
+```bash
+# Compile image
+cargo run -p xrl-image-builder -- --target quest
+
+# Build APK (arm64 only per Meta requirements)
+cargo apk build --package quest-host --target aarch64-linux-android
+
+# Deploy to device
+adb install -r target/android/xr-lang.apk
+```
+
+### Apple Vision Pro
+
+```swift
+// apps/visionos/XRLangApp.swift
+import RealityKit
+import SwiftUI
+
+@main
+struct XRLangApp: App {
+    @StateObject private var vm = XRLangVM()
+    
+    var body: some Scene {
+        ImmersiveSpace(id: "main") {
+            RealityView { content in
+                // Load portable image
+                vm.boot(imageData: loadImage("xr-lang.img"))
+                
+                // Subscribe to VM entity updates
+                vm.onEntityUpdate = { entity in
+                    content.add(entity)
+                }
+            } update: { content in
+                // Per-frame VM tick
+                vm.tick(deltaTime: 1.0/90.0)
+            }
+            .onSpatialTapGesture { location in
+                vm.handleTap(at: location)
+            }
+            .handTrackingEnabled()
+        }
+    }
+}
+
+// Swift-Rust FFI bridge
+class XRLangVM: ObservableObject {
+    private var vmHandle: OpaquePointer?
+    
+    func boot(imageData: Data) {
+        vmHandle = xrlang_vm_boot(
+            imageData.bytes,
+            imageData.count,
+            createCapabilityTable()
+        )
+    }
+    
+    func tick(deltaTime: Float) {
+        xrlang_vm_tick(vmHandle, deltaTime)
+    }
+}
+```
+
+### Web (WebXR + WebGPU)
+
+```rust
+// apps/web/src/lib.rs
+use wasm_bindgen::prelude::*;
+use web_sys::{XrSession, GpuDevice};
+
+#[wasm_bindgen]
+pub struct WebHost {
+    vm: Vm,
+    xr_session: Option<XrSession>,
+    gpu_device: GpuDevice,
+}
+
+#[wasm_bindgen]
+impl WebHost {
+    pub async fn boot() -> Result<WebHost, JsValue> {
+        // Initialize WebGPU
+        let adapter = navigator.gpu().request_adapter().await?;
+        let device = adapter.request_device().await?;
+        
+        // Fetch portable image
+        let image = fetch("/xr-lang.img").await?;
+        
+        // Create capability table
+        let caps = CapabilityTable {
+            gfx: GraphicsCapabilities::from_webgpu(device),
+            xr: None, // Will be filled when entering XR
+            // ...
+        };
+        
+        // Boot VM
+        let vm = Vm::boot(&image, caps)?;
+        
+        Ok(WebHost { vm, xr_session: None, gpu_device: device })
+    }
+    
+    pub async fn enter_xr(&mut self) -> Result<(), JsValue> {
+        let session = navigator.xr()
+            .request_session("immersive-vr", &SessionInit {
+                required_features: vec!["hand-tracking", "anchors"],
+                optional_features: vec!["layers", "depth-sensing"],
+            }).await?;
+        
+        // Update XR capabilities
+        self.vm.caps.xr = Some(XRCapabilities::from_webxr(&session));
+        self.xr_session = Some(session);
+        
+        Ok(())
+    }
+}
+```
+
+**HTML entry point:**
+```html
+<!DOCTYPE html>
+<canvas id="xr-canvas"></canvas>
+<button id="enter-xr">Enter XR</button>
+<script type="module">
+  import init, { WebHost } from './xr_lang_web.js';
+  await init();
+  
+  const host = await WebHost.boot();
+  document.getElementById('enter-xr').onclick = () => host.enter_xr();
+</script>
+```
+
+## GPU Performance Strategy
+
+### Unified Shader Pipeline (WGSL)
+
+All shaders are written in **WGSL** (WebGPU Shading Language) and cross-compiled at runtime:
+
+```wgsl
+// assets/shaders/pbr.wgsl - runs everywhere
+struct VertexInput {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+}
+
+@vertex
+fn vs_main(in: VertexInput) -> VertexOutput {
+    // Shared vertex logic across all platforms
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // PBR shading that looks identical everywhere
+}
+```
+
+The `wgpu` library handles platform-specific compilation:
+- **Quest/Android XR**: WGSL → SPIR-V → Vulkan
+- **Vision Pro/iOS**: WGSL → MSL → Metal
+- **Windows Desktop**: WGSL → HLSL → D3D12
+- **Web**: WGSL → WebGPU (native)
+
+### Performance Optimizations Per Platform
+
+```lisp
+; XR-Lang can query platform capabilities and optimize
+(defn optimize-for-platform []
+  (case (get-platform)
+    :quest (do
+      ; Use fixed foveated rendering
+      (set-render-scale 0.8)
+      (enable-foveated-rendering :level :high)
+      ; Optimize for mobile GPU
+      (prefer-shader-variant :mobile))
+    
+    :vision-pro (do
+      ; Leverage Apple's compositor
+      (enable-compositor-layers true)
+      ; Use RealityKit for complex scenes
+      (prefer-renderer :realitykit))
+    
+    :web (do
+      ; Progressive enhancement
+      (if (supports? :webgpu)
+        (use-compute-shaders true)
+        (fallback-to-webgl2)))))
+```
+
+## Build Pipeline
+
+### Development Workflow
+
+```bash
+# 1. Write XR-Lang code
+vim examples/my-scene.xrl
+
+# 2. Compile to portable image
+cargo run -p xrl-image-builder -- \
+  --input examples/ \
+  --output build/xr-lang.img \
+  --target dev \
+  --features "hot-reload,inspector,time-travel"
+
+# 3. Test on desktop (fastest iteration)
+cargo run -p desktop-host -- build/xr-lang.img
+
+# 4. Deploy to target device
+./deploy.sh quest      # Builds APK, installs via adb
+./deploy.sh web        # Builds WASM, serves locally
+./deploy.sh visionos   # Opens Xcode project
+```
+
+### Production Build
+
+```bash
+# Optimized image with stripped debug info
+cargo run -p xrl-image-builder -- \
+  --input src/ \
+  --output dist/xr-lang.img \
+  --target ship \
+  --optimize 3 \
+  --strip-debug \
+  --sign-with keys/developer.key
+
+# Platform packages
+cargo run -p packager -- \
+  --image dist/xr-lang.img \
+  --platform quest \
+  --output dist/xr-lang-quest.apk \
+  --store-ready
+```
+
+## CI/CD Pipeline
+
+```yaml
+# .github/workflows/build.yml
+name: Cross-Platform Build
+
+on: [push, pull_request]
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+      - run: cargo run -p xrl-image-builder -- --target ship
+      - uses: actions/upload-artifact@v2
+        with:
+          name: xr-lang-image
+          path: build/xr-lang.img
+
+  build-quest:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+      - run: cargo apk build --package quest-host
+      - run: |
+          # Run Meta VRC validation
+          ovr-platform-util verify-vrc ./target/android/xr-lang.apk
+
+  build-web:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+      - run: wasm-pack build apps/web --target web
+      - run: |
+          # Test WebXR in headless Chrome
+          npm run test:webxr
+
+  build-visionos:
+    needs: build-image
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v2
+      - run: |
+          xcodebuild -project apps/visionos/XRLang.xcodeproj \
+                     -scheme XRLang \
+                     -sdk xrsimulator \
+                     -arch arm64
 ```
 
 ## Performance Strategy
