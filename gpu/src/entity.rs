@@ -188,21 +188,141 @@ impl PrimitiveType {
         PrimitiveType::Sphere { radius: 0.5, segments: 32 }
     }
     
-    /// Parse from a string type name
+    /// Parse from a string type name, supports both simple names and parameterized formats
+    /// Simple: "sphere" 
+    /// Parameterized: "sphere:1.5:32" (radius:segments)
     pub fn from_type_string(type_str: &str) -> Option<Self> {
-        match type_str.to_lowercase().as_str() {
-            "cube" | "box" => Some(Self::cube()),
-            "sphere" => Some(Self::sphere()),
-            "cylinder" => Some(PrimitiveType::Cylinder { radius: 0.5, height: 1.0, segments: 32 }),
-            "cone" => Some(PrimitiveType::Cone { radius: 0.5, height: 1.0, segments: 32 }),
-            "pyramid" => Some(PrimitiveType::Pyramid { base_width: 1.0, base_depth: 1.0, height: 1.0 }),
-            "wedge" => Some(PrimitiveType::Wedge { width: 1.0, height: 1.0, depth: 1.0 }),
-            "torus" | "donut" => Some(PrimitiveType::Torus { major_radius: 1.0, minor_radius: 0.3, segments: 32, rings: 16 }),
-            "plane" => Some(PrimitiveType::Plane { width: 10.0, height: 10.0, subdivisions: 1 }),
-            "capsule" => Some(PrimitiveType::Capsule { radius: 0.5, height: 1.0, segments: 32 }),
-            "icosahedron" => Some(PrimitiveType::Icosahedron { radius: 1.0 }),
-            "octahedron" => Some(PrimitiveType::Octahedron { radius: 1.0 }),
-            "tetrahedron" => Some(PrimitiveType::Tetrahedron { radius: 1.0 }),
+        // Split by colon to get type and optional parameters
+        let parts: Vec<&str> = type_str.split(':').collect();
+        let base_type = parts[0].to_lowercase();
+        
+        match base_type.as_str() {
+            "cube" | "box" => {
+                if parts.len() >= 4 {
+                    // box:width:height:depth
+                    let width = parts[1].parse().unwrap_or(1.0);
+                    let height = parts[2].parse().unwrap_or(1.0);
+                    let depth = parts[3].parse().unwrap_or(1.0);
+                    Some(PrimitiveType::Box { width, height, depth })
+                } else {
+                    Some(Self::cube())
+                }
+            },
+            "sphere" => {
+                if parts.len() >= 3 {
+                    // sphere:radius:segments
+                    let radius = parts[1].parse().unwrap_or(1.0);
+                    let segments = parts[2].parse().unwrap_or(32);
+                    Some(PrimitiveType::Sphere { radius, segments })
+                } else {
+                    Some(Self::sphere())
+                }
+            },
+            "cylinder" => {
+                if parts.len() >= 4 {
+                    // cylinder:radius:height:segments
+                    let radius = parts[1].parse().unwrap_or(0.5);
+                    let height = parts[2].parse().unwrap_or(1.0);
+                    let segments = parts[3].parse().unwrap_or(32);
+                    Some(PrimitiveType::Cylinder { radius, height, segments })
+                } else {
+                    Some(PrimitiveType::Cylinder { radius: 0.5, height: 1.0, segments: 32 })
+                }
+            },
+            "cone" => {
+                if parts.len() >= 4 {
+                    // cone:radius:height:segments
+                    let radius = parts[1].parse().unwrap_or(0.5);
+                    let height = parts[2].parse().unwrap_or(1.0);
+                    let segments = parts[3].parse().unwrap_or(32);
+                    Some(PrimitiveType::Cone { radius, height, segments })
+                } else {
+                    Some(PrimitiveType::Cone { radius: 0.5, height: 1.0, segments: 32 })
+                }
+            },
+            "pyramid" => {
+                if parts.len() >= 4 {
+                    // pyramid:base_width:base_depth:height
+                    let base_width = parts[1].parse().unwrap_or(1.0);
+                    let base_depth = parts[2].parse().unwrap_or(1.0);
+                    let height = parts[3].parse().unwrap_or(1.0);
+                    Some(PrimitiveType::Pyramid { base_width, base_depth, height })
+                } else {
+                    Some(PrimitiveType::Pyramid { base_width: 1.0, base_depth: 1.0, height: 1.0 })
+                }
+            },
+            "wedge" => {
+                if parts.len() >= 4 {
+                    // wedge:width:height:depth
+                    let width = parts[1].parse().unwrap_or(1.0);
+                    let height = parts[2].parse().unwrap_or(1.0);
+                    let depth = parts[3].parse().unwrap_or(1.0);
+                    Some(PrimitiveType::Wedge { width, height, depth })
+                } else {
+                    Some(PrimitiveType::Wedge { width: 1.0, height: 1.0, depth: 1.0 })
+                }
+            },
+            "torus" | "donut" => {
+                if parts.len() >= 5 {
+                    // torus:major_radius:minor_radius:segments:rings
+                    let major_radius = parts[1].parse().unwrap_or(1.0);
+                    let minor_radius = parts[2].parse().unwrap_or(0.3);
+                    let segments = parts[3].parse().unwrap_or(32);
+                    let rings = parts[4].parse().unwrap_or(16);
+                    Some(PrimitiveType::Torus { major_radius, minor_radius, segments, rings })
+                } else {
+                    Some(PrimitiveType::Torus { major_radius: 1.0, minor_radius: 0.3, segments: 32, rings: 16 })
+                }
+            },
+            "plane" => {
+                if parts.len() >= 4 {
+                    // plane:width:height:subdivisions
+                    let width = parts[1].parse().unwrap_or(10.0);
+                    let height = parts[2].parse().unwrap_or(10.0);
+                    let subdivisions = parts[3].parse().unwrap_or(1);
+                    Some(PrimitiveType::Plane { width, height, subdivisions })
+                } else {
+                    Some(PrimitiveType::Plane { width: 10.0, height: 10.0, subdivisions: 1 })
+                }
+            },
+            "capsule" => {
+                if parts.len() >= 4 {
+                    // capsule:radius:height:segments
+                    let radius = parts[1].parse().unwrap_or(0.5);
+                    let height = parts[2].parse().unwrap_or(1.0);
+                    let segments = parts[3].parse().unwrap_or(32);
+                    Some(PrimitiveType::Capsule { radius, height, segments })
+                } else {
+                    Some(PrimitiveType::Capsule { radius: 0.5, height: 1.0, segments: 32 })
+                }
+            },
+            "icosahedron" => {
+                if parts.len() >= 2 {
+                    // icosahedron:radius
+                    let radius = parts[1].parse().unwrap_or(1.0);
+                    Some(PrimitiveType::Icosahedron { radius })
+                } else {
+                    Some(PrimitiveType::Icosahedron { radius: 1.0 })
+                }
+            },
+            "octahedron" => {
+                if parts.len() >= 2 {
+                    // octahedron:radius
+                    let radius = parts[1].parse().unwrap_or(1.0);
+                    Some(PrimitiveType::Octahedron { radius })
+                } else {
+                    Some(PrimitiveType::Octahedron { radius: 1.0 })
+                }
+            },
+            "tetrahedron" => {
+                if parts.len() >= 2 {
+                    // tetrahedron:radius
+                    let radius = parts[1].parse().unwrap_or(1.0);
+                    Some(PrimitiveType::Tetrahedron { radius })
+                } else {
+                    Some(PrimitiveType::Tetrahedron { radius: 1.0 })
+                }
+            },
             _ => None,
         }
     }

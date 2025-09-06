@@ -217,13 +217,33 @@ pub fn intrinsic_create_cube() -> NativeFn {
 }
 
 /// Create a sphere mesh
+/// (create-sphere position [radius] [segments])
 pub fn intrinsic_create_sphere() -> NativeFn {
     Rc::new(|args| {
-        if args.len() != 1 {
-            return Err("create-sphere expects 1 argument (position)".to_string());
+        if args.is_empty() || args.len() > 3 {
+            return Err("create-sphere expects 1-3 arguments (position, [radius], [segments])".to_string());
         }
         
         let position = Vec3::from_value(&args[0])?;
+        
+        let radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Radius must be a number".to_string()),
+            }
+        } else {
+            1.0
+        };
+        
+        let segments = if args.len() > 2 {
+            match &args[2] {
+                Value::Int(i) => *i as u32,
+                _ => return Err("Segments must be an integer".to_string()),
+            }
+        } else {
+            32
+        };
         
         SCENE.with(|scene| {
             let mut scene = scene.borrow_mut();
@@ -236,7 +256,561 @@ pub fn intrinsic_create_sphere() -> NativeFn {
                 id,
                 name: format!("sphere_{}", id.0),
                 transform,
-                mesh_type: Some("sphere".to_string()),
+                mesh_type: Some(format!("sphere:{}:{}", radius, segments)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a cylinder mesh
+/// (create-cylinder position [radius] [height] [segments])
+pub fn intrinsic_create_cylinder() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 4 {
+            return Err("create-cylinder expects 1-4 arguments (position, [radius], [height], [segments])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Radius must be a number".to_string()),
+            }
+        } else {
+            1.0
+        };
+        
+        let height = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Height must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        let segments = if args.len() > 3 {
+            match &args[3] {
+                Value::Int(i) => *i as u32,
+                _ => return Err("Segments must be an integer".to_string()),
+            }
+        } else {
+            32
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("cylinder_{}", id.0),
+                transform,
+                mesh_type: Some(format!("cylinder:{}:{}:{}", radius, height, segments)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a cone mesh
+/// (create-cone position [radius] [height] [segments])
+pub fn intrinsic_create_cone() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 4 {
+            return Err("create-cone expects 1-4 arguments (position, [radius], [height], [segments])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Radius must be a number".to_string()),
+            }
+        } else {
+            1.0
+        };
+        
+        let height = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Height must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        let segments = if args.len() > 3 {
+            match &args[3] {
+                Value::Int(i) => *i as u32,
+                _ => return Err("Segments must be an integer".to_string()),
+            }
+        } else {
+            32
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("cone_{}", id.0),
+                transform,
+                mesh_type: Some(format!("cone:{}:{}:{}", radius, height, segments)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a pyramid mesh
+/// (create-pyramid position [base-width] [base-depth] [height])
+pub fn intrinsic_create_pyramid() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 4 {
+            return Err("create-pyramid expects 1-4 arguments (position, [base-width], [base-depth], [height])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let base_width = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Base width must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        let base_depth = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Base depth must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        let height = if args.len() > 3 {
+            match &args[3] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Height must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("pyramid_{}", id.0),
+                transform,
+                mesh_type: Some(format!("pyramid:{}:{}:{}", base_width, base_depth, height)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a wedge mesh
+/// (create-wedge position [width] [height] [depth])
+pub fn intrinsic_create_wedge() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 4 {
+            return Err("create-wedge expects 1-4 arguments (position, [width], [height], [depth])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let width = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Width must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        let height = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Height must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        let depth = if args.len() > 3 {
+            match &args[3] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Depth must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("wedge_{}", id.0),
+                transform,
+                mesh_type: Some(format!("wedge:{}:{}:{}", width, height, depth)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a torus (donut) mesh
+/// (create-torus position [major-radius] [minor-radius] [segments] [rings])
+pub fn intrinsic_create_torus() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 5 {
+            return Err("create-torus expects 1-5 arguments (position, [major-radius], [minor-radius], [segments], [rings])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let major_radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Major radius must be a number".to_string()),
+            }
+        } else {
+            1.0
+        };
+        
+        let minor_radius = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Minor radius must be a number".to_string()),
+            }
+        } else {
+            0.3
+        };
+        
+        let segments = if args.len() > 3 {
+            match &args[3] {
+                Value::Int(i) => *i as u32,
+                _ => return Err("Segments must be an integer".to_string()),
+            }
+        } else {
+            24
+        };
+        
+        let rings = if args.len() > 4 {
+            match &args[4] {
+                Value::Int(i) => *i as u32,
+                _ => return Err("Rings must be an integer".to_string()),
+            }
+        } else {
+            18
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("torus_{}", id.0),
+                transform,
+                mesh_type: Some(format!("torus:{}:{}:{}:{}", major_radius, minor_radius, segments, rings)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a plane mesh
+/// (create-plane position [width] [height] [subdivisions])
+pub fn intrinsic_create_plane() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 4 {
+            return Err("create-plane expects 1-4 arguments (position, [width], [height], [subdivisions])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let width = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Width must be a number".to_string()),
+            }
+        } else {
+            10.0
+        };
+        
+        let height = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Height must be a number".to_string()),
+            }
+        } else {
+            10.0
+        };
+        
+        let subdivisions = if args.len() > 3 {
+            match &args[3] {
+                Value::Int(i) => *i as u32,
+                _ => return Err("Subdivisions must be an integer".to_string()),
+            }
+        } else {
+            10
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("plane_{}", id.0),
+                transform,
+                mesh_type: Some(format!("plane:{}:{}:{}", width, height, subdivisions)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a capsule mesh
+/// (create-capsule position [radius] [height] [segments])
+pub fn intrinsic_create_capsule() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 4 {
+            return Err("create-capsule expects 1-4 arguments (position, [radius], [height], [segments])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Radius must be a number".to_string()),
+            }
+        } else {
+            0.5
+        };
+        
+        let height = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Height must be a number".to_string()),
+            }
+        } else {
+            2.0
+        };
+        
+        let segments = if args.len() > 3 {
+            match &args[3] {
+                Value::Int(i) => *i as u32,
+                _ => return Err("Segments must be an integer".to_string()),
+            }
+        } else {
+            24
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("capsule_{}", id.0),
+                transform,
+                mesh_type: Some(format!("capsule:{}:{}:{}", radius, height, segments)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create an icosahedron mesh
+/// (create-icosahedron position [radius])
+pub fn intrinsic_create_icosahedron() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 2 {
+            return Err("create-icosahedron expects 1-2 arguments (position, [radius])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Radius must be a number".to_string()),
+            }
+        } else {
+            1.0
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("icosahedron_{}", id.0),
+                transform,
+                mesh_type: Some(format!("icosahedron:{}", radius)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create an octahedron mesh
+/// (create-octahedron position [radius])
+pub fn intrinsic_create_octahedron() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 2 {
+            return Err("create-octahedron expects 1-2 arguments (position, [radius])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Radius must be a number".to_string()),
+            }
+        } else {
+            1.0
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("octahedron_{}", id.0),
+                transform,
+                mesh_type: Some(format!("octahedron:{}", radius)),
+                children: Vec::new(),
+            };
+            
+            scene.nodes.insert(id, node);
+            Ok(Value::Object(id))
+        })
+    })
+}
+
+/// Create a tetrahedron mesh
+/// (create-tetrahedron position [radius])
+pub fn intrinsic_create_tetrahedron() -> NativeFn {
+    Rc::new(|args| {
+        if args.is_empty() || args.len() > 2 {
+            return Err("create-tetrahedron expects 1-2 arguments (position, [radius])".to_string());
+        }
+        
+        let position = Vec3::from_value(&args[0])?;
+        
+        let radius = if args.len() > 1 {
+            match &args[1] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("Radius must be a number".to_string()),
+            }
+        } else {
+            1.0
+        };
+        
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            let id = scene.generate_id();
+            
+            let mut transform = Transform::identity();
+            transform.position = position;
+            
+            let node = SceneNode {
+                id,
+                name: format!("tetrahedron_{}", id.0),
+                transform,
+                mesh_type: Some(format!("tetrahedron:{}", radius)),
                 children: Vec::new(),
             };
             
@@ -389,13 +963,32 @@ pub fn intrinsic_raycast() -> NativeFn {
 pub fn register_scene_intrinsics() -> HashMap<String, NativeFn> {
     let mut intrinsics = HashMap::new();
     
+    // Camera and scene control
     intrinsics.insert("create-camera".to_string(), intrinsic_create_camera());
+    
+    // Basic primitives
     intrinsics.insert("create-cube".to_string(), intrinsic_create_cube());
     intrinsics.insert("create-sphere".to_string(), intrinsic_create_sphere());
+    intrinsics.insert("create-cylinder".to_string(), intrinsic_create_cylinder());
+    intrinsics.insert("create-cone".to_string(), intrinsic_create_cone());
+    intrinsics.insert("create-pyramid".to_string(), intrinsic_create_pyramid());
+    intrinsics.insert("create-wedge".to_string(), intrinsic_create_wedge());
+    intrinsics.insert("create-torus".to_string(), intrinsic_create_torus());
+    intrinsics.insert("create-plane".to_string(), intrinsic_create_plane());
+    intrinsics.insert("create-capsule".to_string(), intrinsic_create_capsule());
+    
+    // Platonic solids
+    intrinsics.insert("create-icosahedron".to_string(), intrinsic_create_icosahedron());
+    intrinsics.insert("create-octahedron".to_string(), intrinsic_create_octahedron());
+    intrinsics.insert("create-tetrahedron".to_string(), intrinsic_create_tetrahedron());
+    
+    // Transform operations
     intrinsics.insert("update-transform".to_string(), intrinsic_update_transform());
     intrinsics.insert("rotate".to_string(), intrinsic_rotate());
     intrinsics.insert("scale".to_string(), intrinsic_scale());
     intrinsics.insert("get-position".to_string(), intrinsic_get_position());
+    
+    // Utility functions
     intrinsics.insert("matrix-multiply".to_string(), intrinsic_matrix_multiply());
     intrinsics.insert("raycast".to_string(), intrinsic_raycast());
     

@@ -5,8 +5,8 @@ use std::path::Path;
 use vm::{
     parser::Parser,
     evaluator::Evaluator,
-    value::{Environment, ObjectId},
-    intrinsics::SCENE,
+    value::{Environment, ObjectId, Value, Symbol},
+    intrinsics::{SCENE, register_scene_intrinsics},
 };
 use gpu::scene::{SceneData, CameraData};
 use gpu::entity::{Entity, PrimitiveType, MeshSource, Transform};
@@ -20,9 +20,23 @@ pub struct XrlRunner {
 
 impl XrlRunner {
     pub fn new() -> Self {
+        // Create environment with intrinsic functions
+        let mut env = Environment::new();
+        let intrinsics = register_scene_intrinsics();
+        
+        // Register all intrinsic functions in the environment
+        for (name, func) in intrinsics {
+            env.bind(Symbol(name), Value::NativeFunction(func));
+        }
+        
+        // Add basic utility functions
+        env.bind(Symbol("list".to_string()), Value::NativeFunction(
+            Rc::new(|args| Ok(Value::List(args.to_vec())))
+        ));
+        
         Self {
             evaluator: Evaluator::new(),
-            environment: Rc::new(Environment::new()),
+            environment: Rc::new(env),
         }
     }
     
@@ -107,21 +121,18 @@ impl XrlRunner {
             // Convert scene nodes to entities
             for (ObjectId(id), node) in scene.nodes.iter() {
                 if let Some(mesh_type) = &node.mesh_type {
-                    let primitive = match mesh_type.as_str() {
-                        "cube" => PrimitiveType::Box { 
-                            width: 1.0, 
-                            height: 1.0, 
-                            depth: 1.0 
-                        },
-                        "sphere" => PrimitiveType::Sphere { 
-                            radius: 0.5, 
-                            segments: 32 
-                        },
-                        _ => PrimitiveType::Box { 
-                            width: 1.0, 
-                            height: 1.0, 
-                            depth: 1.0 
-                        },
+                    // Use the from_type_string method that handles parameterized formats
+                    // like "sphere:1.5:32" or "cylinder:0.5:2:24"
+                    let mesh_source = if let Some(primitive) = PrimitiveType::from_type_string(mesh_type) {
+                        MeshSource::Primitive(primitive)
+                    } else {
+                        // Default to a cube if unknown
+                        println!("Warning: Unknown mesh type '{}', using default cube", mesh_type);
+                        MeshSource::Primitive(PrimitiveType::Box {
+                            width: 1.0,
+                            height: 1.0,
+                            depth: 1.0,
+                        })
                     };
                     
                     let mut transform = Transform::default();
@@ -144,7 +155,7 @@ impl XrlRunner {
                     scene_data.entities.push(Entity {
                         id: format!("object_{}", id),
                         name: node.name.clone(),
-                        mesh: MeshSource::Primitive(primitive),
+                        mesh: mesh_source,
                         transform,
                         material: None,
                         behavior: None,
