@@ -12,11 +12,11 @@ XR-Lang synthesizes **Lisp's homoiconicity**, **Smalltalk's live objects**, and 
 
 1. [Core Architecture](#core-architecture)
 2. [Implementation Roadmap](#implementation-roadmap)
-3. [Stage A: Seed System](#stage-a-seed-system-weeks-1-4)
-4. [Stage B: Homoiconic Core](#stage-b-homoiconic-core-weeks-5-8)
-5. [Stage C: Live Tooling](#stage-c-live-tooling-weeks-9-12)
-6. [Stage D: Meta-Programming](#stage-d-meta-programming-weeks-13-16)
-7. [Stage E: AI Integration](#stage-e-ai-integration-weeks-17-20)
+3. [Stage A: Seed System](#stage-a-seed-system)
+4. [Stage B: Homoiconic Core](#stage-b-homoiconic-core)
+5. [Stage C: Live Tooling](#stage-c-live-tooling)
+6. [Stage D: Meta-Programming](#stage-d-meta-programming)
+7. [Stage E: AI Integration](#stage-e-ai-integration)
 8. [Technical Specifications](#technical-specifications)
 9. [Code Examples & Patterns](#code-examples--patterns)
 10. [Resources & Inspirations](#resources--inspirations)
@@ -82,7 +82,7 @@ Drawing from the lang-design-review.md recommendations:
 - **Phase 2 (Metacircular)**: ~30% Rust / 70% XR-Lang  
 - **Phase 3 (Mature)**: ~25% Rust / 75% XR-Lang
 
-## Stage A: Seed System (Weeks 1-4)
+## Stage A: Seed System
 
 ### Concrete Tasks
 

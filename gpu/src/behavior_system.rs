@@ -3,6 +3,18 @@
 use std::collections::HashMap;
 use anyhow::Result;
 
+// Convert from interpreter Value to vm Value
+fn convert_interpreter_value_to_vm_value(val: &vm::interpreter::Value) -> vm::Value {
+    match val {
+        vm::interpreter::Value::F32(n) => vm::Value::Float(*n as f64),
+        vm::interpreter::Value::I32(i) => vm::Value::Int(*i as i64),
+        vm::interpreter::Value::String(s) => vm::Value::Str(s.clone()),
+        vm::interpreter::Value::Bool(b) => vm::Value::Bool(*b),
+        vm::interpreter::Value::Nil => vm::Value::Nil,
+        _ => vm::Value::Nil, // Default for unsupported types
+    }
+}
+
 pub struct BehaviorSystem {
     pub interpreter: vm::Interpreter,
     pub behavior_ast: HashMap<String, dsl::ast::Behavior>,
@@ -56,7 +68,7 @@ impl BehaviorSystem {
                                 
                                 if let Some(old_val) = old_initial {
                                     // Check if the current runtime value differs from the old initial value
-                                    if let vm::Value::F32(current_f32) = current_value {
+                                    if let vm::interpreter::Value::F32(current_f32) = current_value {
                                         if (*current_f32 - old_val).abs() > 0.001 {
                                             // This value has been modified at runtime, preserve it
                                             modified_state.insert(key.clone(), current_value.clone());
@@ -174,7 +186,7 @@ impl BehaviorSystem {
             for (key, value) in &behavior.env.vars {
                 // Only collect properties with dot notation (e.g., rotation.x, position.y)
                 if key.contains('.') {
-                    update.properties.insert(key.clone(), value.clone());
+                    update.properties.insert(key.clone(), convert_interpreter_value_to_vm_value(value));
                     // // println!(DEBUG: Found {} = {:?} in behavior '{}'", key, value, behavior_name);
                 }
             }
@@ -182,7 +194,7 @@ impl BehaviorSystem {
             // Also check state for any non-dotted properties
             for (key, value) in &behavior.state {
                 if !key.starts_with('_') {  // Skip internal state
-                    update.properties.insert(key.clone(), value.clone());
+                    update.properties.insert(key.clone(), convert_interpreter_value_to_vm_value(value));
                 }
             }
             

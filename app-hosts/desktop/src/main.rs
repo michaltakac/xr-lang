@@ -1,6 +1,8 @@
 //! Desktop development host for XR-DSL
 
 mod hotreload;
+mod xrl_runner;
+mod live_xrl_runner;
 
 use anyhow::Result;
 use std::time::Instant;
@@ -33,7 +35,7 @@ async fn main() -> Result<()> {
     let mut renderer_3d = gpu::Renderer3D::new(&gpu_ctx.device, &gpu_ctx.queue, &gpu_ctx.config);
     println!("✅ 3D renderer created!");
     
-    // Load scene from command-line argument or default to spinning_cubes.xrdsl
+    // Load scene from command-line argument or default
     let args: Vec<String> = std::env::args().collect();
     let initial_scene = if args.len() > 1 {
         // Use provided scene file - convert to absolute path if relative
@@ -44,7 +46,7 @@ async fn main() -> Result<()> {
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")).join(path)
         }
     } else {
-        // Default to examples directory
+        // Default to 3D example
         let examples_path = if std::path::Path::new("examples").exists() {
             std::path::Path::new("examples")
         } else if std::path::Path::new("../../examples").exists() {
@@ -52,7 +54,13 @@ async fn main() -> Result<()> {
         } else {
             std::path::Path::new(".")
         };
-        examples_path.join("spinning_cubes.xrdsl")
+        // Try XRL first, fall back to XRDSL
+        let xrl_path = examples_path.join("3d_scene_basic.xrl");
+        if xrl_path.exists() {
+            xrl_path
+        } else {
+            examples_path.join("spinning_cubes.xrdsl")
+        }
     };
     
     // Set up hot-reload system to watch the directory containing the target file
@@ -63,24 +71,46 @@ async fn main() -> Result<()> {
     };
     let mut hot_reloader = HotReloader::new(&watch_path)?;
     let mut scene_loader = SceneLoader::new();
+    let mut xrl_runner = xrl_runner::XrlRunner::new();
     
     if initial_scene.exists() {
-        if let Ok(Some(update)) = scene_loader.load_scene_from_file(initial_scene.to_str().unwrap()) {
-            // Set the source path for code sync
-            renderer_3d.set_source_path(&initial_scene);
-            
-            match update {
-                SceneUpdate::Full(scene_data) => {
+        // Check if it's an XRL file or XRDSL file
+        let is_xrl = initial_scene.extension()
+            .map(|ext| ext == "xrl")
+            .unwrap_or(false);
+        
+        if is_xrl {
+            // Load XRL file using VM
+            match xrl_runner.load_xrl_file(&initial_scene) {
+                Ok(scene_data) => {
+                    renderer_3d.set_source_path(&initial_scene);
                     renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                    println!("✅ Loaded XRL scene from: {}", initial_scene.display());
                 }
-                SceneUpdate::Incremental { scene_data, .. } => {
-                    // For initial load, treat as full update
-                    renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                Err(e) => {
+                    println!("⚠️  Could not load XRL file {}: {}", initial_scene.display(), e);
+                    println!("   Using default scene");
                 }
             }
-            println!("✅ Loaded initial scene from: {}", initial_scene.display());
         } else {
-            println!("⚠️  Could not parse {}, using default scene", initial_scene.display());
+            // Load XRDSL file using old loader
+            if let Ok(Some(update)) = scene_loader.load_scene_from_file(initial_scene.to_str().unwrap()) {
+                // Set the source path for code sync
+                renderer_3d.set_source_path(&initial_scene);
+                
+                match update {
+                    SceneUpdate::Full(scene_data) => {
+                        renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                    }
+                    SceneUpdate::Incremental { scene_data, .. } => {
+                        // For initial load, treat as full update
+                        renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                    }
+                }
+                println!("✅ Loaded XRDSL scene from: {}", initial_scene.display());
+            } else {
+                println!("⚠️  Could not parse {}, using default scene", initial_scene.display());
+            }
         }
     } else {
         println!("⚠️  Scene file {} not found, using default scene", initial_scene.display());
@@ -158,16 +188,37 @@ async fn main() -> Result<()> {
                 // Check for hot-reload changes
                 if let Some(changed_file) = hot_reloader.check_for_changes() {
                     println!("📁 Detected change in: {}", changed_file);
-                    if let Ok(Some(update)) = scene_loader.load_scene_from_file(&changed_file) {
-                        match update {
-                            SceneUpdate::Full(scene_data) => {
-                                println!("🔄 Full scene reload");
-                                renderer_3d.load_scene(scene_data, &gpu_ctx.device);
+                    
+                    // Check if it's an XRL file
+                    let is_xrl = std::path::Path::new(&changed_file)
+                        .extension()
+                        .map(|ext| ext == "xrl")
+                        .unwrap_or(false);
+                    
+                    if is_xrl {
+                        // Reload XRL file using VM
+                        match xrl_runner.reload_xrl_file(std::path::Path::new(&changed_file)) {
+                            Ok(scene_data) => {
+                                println!("🔄 Hot-reloading XRL scene");
+                                renderer_3d.load_scene_from_hot_reload(scene_data, &gpu_ctx.device);
                             }
-                            SceneUpdate::Incremental { scene_data, changes } => {
-                                println!("⚡ Incremental update with {} changes", changes.len());
-                                // Apply incremental changes
-                                renderer_3d.apply_scene_changes(scene_data, changes, &gpu_ctx.device);
+                            Err(e) => {
+                                println!("⚠️  Error reloading XRL file: {}", e);
+                            }
+                        }
+                    } else {
+                        // Load XRDSL file using old loader
+                        if let Ok(Some(update)) = scene_loader.load_scene_from_file(&changed_file) {
+                            match update {
+                                SceneUpdate::Full(scene_data) => {
+                                    println!("🔄 Full scene reload");
+                                    renderer_3d.load_scene_from_hot_reload(scene_data, &gpu_ctx.device);
+                                }
+                                SceneUpdate::Incremental { scene_data, changes } => {
+                                    println!("⚡ Incremental update with {} changes", changes.len());
+                                    // Apply incremental changes
+                                    renderer_3d.apply_scene_changes(scene_data, changes, &gpu_ctx.device);
+                                }
                             }
                         }
                     }

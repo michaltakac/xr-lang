@@ -13,6 +13,7 @@ use std::collections::HashMap;
 pub struct Evaluator {
     pub macro_expander: MacroExpander,
     pub global_env: Rc<Environment>,
+    pub on_redefinition_callback: Option<Box<dyn Fn(Symbol, Value)>>,
 }
 
 impl Evaluator {
@@ -20,9 +21,25 @@ impl Evaluator {
         let mut evaluator = Evaluator {
             macro_expander: MacroExpander::new(),
             global_env: Rc::new(Environment::new()),
+            on_redefinition_callback: None,
         };
         evaluator.init_primitives();
         evaluator
+    }
+    
+    /// Set a callback for when definitions are updated
+    pub fn set_redefinition_callback<F>(&mut self, callback: F) 
+    where
+        F: Fn(Symbol, Value) + 'static,
+    {
+        self.on_redefinition_callback = Some(Box::new(callback));
+    }
+    
+    /// Called when a definition is updated
+    fn on_redefinition(&self, name: Symbol, value: Value) {
+        if let Some(ref callback) = self.on_redefinition_callback {
+            callback(name, value);
+        }
     }
 
     /// Initialize primitive functions
@@ -170,6 +187,80 @@ impl Evaluator {
             })
         ));
 
+        // List construction
+        env.bind(Symbol("list".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                Ok(Value::List(args.to_vec()))
+            })
+        ));
+        
+        // Math functions for 3D calculations
+        env.bind(Symbol("sin".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                if args.len() != 1 {
+                    return Err("sin expects 1 argument".to_string());
+                }
+                match &args[0] {
+                    Value::Float(n) => Ok(Value::Float(n.sin())),
+                    Value::Int(n) => Ok(Value::Float((*n as f64).sin())),
+                    _ => Err("sin expects a number".to_string()),
+                }
+            })
+        ));
+        
+        env.bind(Symbol("cos".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                if args.len() != 1 {
+                    return Err("cos expects 1 argument".to_string());
+                }
+                match &args[0] {
+                    Value::Float(n) => Ok(Value::Float(n.cos())),
+                    Value::Int(n) => Ok(Value::Float((*n as f64).cos())),
+                    _ => Err("cos expects a number".to_string()),
+                }
+            })
+        ));
+        
+        // Division operator (was missing)
+        env.bind(Symbol("/".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                if args.len() != 2 {
+                    return Err("/ expects exactly 2 arguments".to_string());
+                }
+                match (&args[0], &args[1]) {
+                    (Value::Int(a), Value::Int(b)) => {
+                        if *b == 0 {
+                            Err("Division by zero".to_string())
+                        } else {
+                            Ok(Value::Float(*a as f64 / *b as f64))
+                        }
+                    }
+                    (Value::Float(a), Value::Int(b)) => {
+                        if *b == 0 {
+                            Err("Division by zero".to_string())
+                        } else {
+                            Ok(Value::Float(a / *b as f64))
+                        }
+                    }
+                    (Value::Int(a), Value::Float(b)) => {
+                        if *b == 0.0 {
+                            Err("Division by zero".to_string())
+                        } else {
+                            Ok(Value::Float(*a as f64 / b))
+                        }
+                    }
+                    (Value::Float(a), Value::Float(b)) => {
+                        if *b == 0.0 {
+                            Err("Division by zero".to_string())
+                        } else {
+                            Ok(Value::Float(a / b))
+                        }
+                    }
+                    _ => Err("/ expects numbers".to_string()),
+                }
+            })
+        ));
+        
         // List operations
         env.bind(Symbol("cons".to_string()), Value::NativeFunction(
             Rc::new(|args| {
@@ -260,6 +351,18 @@ impl Evaluator {
                 Ok(Value::Bool(matches!(args[0], Value::List(_))))
             })
         ));
+        
+        // Register scene intrinsics
+        let scene_intrinsics = crate::intrinsics::register_scene_intrinsics();
+        for (name, func) in scene_intrinsics {
+            env.bind(Symbol(name), Value::NativeFunction(func));
+        }
+        
+        // Register meta-level functions
+        let meta_functions = crate::meta::register_meta_functions();
+        for (name, func) in meta_functions {
+            env.bind(Symbol(name), Value::NativeFunction(func));
+        }
     }
 
     /// The core eval function - evaluates XR-Lang expressions
@@ -418,16 +521,23 @@ impl Evaluator {
         
         match &args[0] {
             Value::Symbol(sym) => {
+                // Check if this is a redefinition (for live updates)
+                let is_redefinition = self.global_env.lookup(sym).is_some();
+                
                 let value = self.eval_expanded(&args[1], env.clone())?;
                 
                 // Clone the environment to modify it
                 let mut new_env = (*env).clone();
                 new_env.bind(sym.clone(), value.clone());
                 
-                // This is a bit of a hack - in a real system we'd need
-                // mutable environment references
+                // Update global environment
                 if let Some(global) = Rc::get_mut(&mut self.global_env) {
                     global.bind(sym.clone(), value.clone());
+                }
+                
+                // Notify about redefinition (for live update hooks)
+                if is_redefinition {
+                    self.on_redefinition(sym.clone(), value.clone());
                 }
                 
                 Ok(value)

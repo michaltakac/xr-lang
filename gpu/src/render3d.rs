@@ -364,8 +364,17 @@ impl Renderer3D {
     }
     
     pub fn load_scene(&mut self, mut scene_data: SceneData, device: &Device) {
-        println!("🔄 Loading new scene with {} entities, {} UI elements", 
-            scene_data.entities.len(), scene_data.ui_elements.len());
+        self.load_scene_with_options(scene_data, device, false);
+    }
+    
+    pub fn load_scene_from_hot_reload(&mut self, mut scene_data: SceneData, device: &Device) {
+        self.load_scene_with_options(scene_data, device, true);
+    }
+    
+    fn load_scene_with_options(&mut self, mut scene_data: SceneData, device: &Device, is_hot_reload: bool) {
+        println!("🔄 Loading new scene with {} entities, {} UI elements{}", 
+            scene_data.entities.len(), scene_data.ui_elements.len(),
+            if is_hot_reload { " (hot-reload)" } else { "" });
         
         // Hot-swap behaviors from AST
         if !scene_data.ast.is_empty() {
@@ -377,8 +386,9 @@ impl Renderer3D {
             }
         }
         
-        // Extract current runtime state before loading new scene
-        if self.runtime_state.should_preserve_camera() {
+        // Only preserve camera state if NOT a hot-reload (file change)
+        // During hot-reload, we want the scene file to drive all values
+        if !is_hot_reload && self.runtime_state.should_preserve_camera() {
             self.runtime_state.preserve_camera(self.camera.position, self.camera_target, 
                 std::f32::consts::FRAC_PI_4); // TODO: Store FOV properly
             
@@ -388,10 +398,10 @@ impl Renderer3D {
                     self.code_sync.queue_camera_update(camera_state);
                 }
             }
+            
+            // Apply preserved state to new scene data
+            self.runtime_state.apply_to_scene(&mut scene_data);
         }
-        
-        // Apply preserved state to new scene data
-        self.runtime_state.apply_to_scene(&mut scene_data);
         
         self.scene_data = scene_data;
         self.rebuild_scene(device);
@@ -724,17 +734,17 @@ impl Renderer3D {
                         
                         // Extract all properties
                         for (key, value) in &update.properties {
-                            if let vm::Value::F32(v) = value {
+                            if let vm::Value::Float(v) = value {
                                 match key.as_str() {
-                                    "rotation.x" => rotation_x = Some(*v),
-                                    "rotation.y" => rotation_y = Some(*v),
-                                    "rotation.z" => rotation_z = Some(*v),
-                                    "position.x" => position_x = Some(*v),
-                                    "position.y" => position_y = Some(*v),
-                                    "position.z" => position_z = Some(*v),
-                                    "scale.x" => scale_x = Some(*v),
-                                    "scale.y" => scale_y = Some(*v),
-                                    "scale.z" => scale_z = Some(*v),
+                                    "rotation.x" => rotation_x = Some(*v as f32),
+                                    "rotation.y" => rotation_y = Some(*v as f32),
+                                    "rotation.z" => rotation_z = Some(*v as f32),
+                                    "position.x" => position_x = Some(*v as f32),
+                                    "position.y" => position_y = Some(*v as f32),
+                                    "position.z" => position_z = Some(*v as f32),
+                                    "scale.x" => scale_x = Some(*v as f32),
+                                    "scale.y" => scale_y = Some(*v as f32),
+                                    "scale.z" => scale_z = Some(*v as f32),
                                     _ => {}
                                 }
                             }

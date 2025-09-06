@@ -91,9 +91,9 @@ pub struct SceneNode {
 
 /// Global scene state (would be managed by the runtime)
 pub struct SceneState {
-    next_id: u64,
-    nodes: HashMap<ObjectId, SceneNode>,
-    cameras: HashMap<ObjectId, Camera>,
+    pub next_id: u64,
+    pub nodes: HashMap<ObjectId, SceneNode>,
+    pub cameras: HashMap<ObjectId, Camera>,
 }
 
 impl SceneState {
@@ -114,17 +114,37 @@ impl SceneState {
 
 // Thread-local scene state (in a real implementation, this would be managed differently)
 thread_local! {
-    static SCENE: std::cell::RefCell<SceneState> = std::cell::RefCell::new(SceneState::new());
+    pub static SCENE: std::cell::RefCell<SceneState> = std::cell::RefCell::new(SceneState::new());
 }
 
 /// Create a camera in the scene
+/// Can be called with 1, 2, or 3 arguments:
+/// (create-camera position)
+/// (create-camera position target)
+/// (create-camera position target fov-degrees)
 pub fn intrinsic_create_camera() -> NativeFn {
     Rc::new(|args| {
-        if args.len() != 1 {
-            return Err("create-camera expects 1 argument (position)".to_string());
+        if args.is_empty() || args.len() > 3 {
+            return Err("create-camera expects 1-3 arguments (position, [target], [fov-degrees])".to_string());
         }
         
         let position = Vec3::from_value(&args[0])?;
+        
+        let target = if args.len() > 1 {
+            Vec3::from_value(&args[1])?
+        } else {
+            Vec3::new(0.0, 0.0, 0.0)
+        };
+        
+        let fov = if args.len() > 2 {
+            match &args[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return Err("FOV must be a number (in degrees)".to_string()),
+            }
+        } else {
+            60.0
+        };
         
         SCENE.with(|scene| {
             let mut scene = scene.borrow_mut();
@@ -132,8 +152,8 @@ pub fn intrinsic_create_camera() -> NativeFn {
             
             let camera = Camera {
                 position,
-                target: Vec3::new(0.0, 0.0, 0.0),
-                fov: 60.0,
+                target,
+                fov: fov.to_radians(),  // Convert to radians for renderer
             };
             
             scene.cameras.insert(id, camera);

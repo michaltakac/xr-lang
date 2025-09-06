@@ -31,7 +31,8 @@ impl HotReloader {
                 Ok(event) => {
                     if let Some(path) = event.paths.first() {
                         if let Some(extension) = path.extension() {
-                            if extension == "xrdsl" {
+                            // Watch for both XRDSL and XRL files
+                            if extension == "xrdsl" || extension == "xrl" {
                                 if let Some(path_str) = path.to_str() {
                                     let _ = tx.send(path_str.to_string());
                                 }
@@ -81,6 +82,8 @@ pub struct SceneLoader {
     current_scene: Option<String>,
     reconciler: gpu::reconciliation::SceneReconciler,
     last_scene_data: Option<gpu::SceneData>,
+    live_runner: Option<crate::live_xrl_runner::LiveXrlRunner>,
+    is_live_mode: bool,
 }
 
 impl SceneLoader {
@@ -89,11 +92,84 @@ impl SceneLoader {
             current_scene: None,
             reconciler: gpu::reconciliation::SceneReconciler::new(),
             last_scene_data: None,
+            live_runner: None,
+            is_live_mode: true, // Enable live mode by default
         }
     }
     
+    pub fn set_live_mode(&mut self, enabled: bool) {
+        self.is_live_mode = enabled;
+        if let Some(runner) = &mut self.live_runner {
+            runner.set_live_mode(enabled);
+        }
+        println!("[LIVE] Live mode {}", if enabled { "enabled" } else { "disabled" });
+    }
+    
     pub fn load_scene_from_file(&mut self, file_path: &str) -> Result<Option<SceneUpdate>> {
-        println!("🔄 Reloading scene from: {}", file_path);
+        // Check file extension to determine type
+        let path = std::path::Path::new(file_path);
+        let extension = path.extension().and_then(|s| s.to_str());
+        
+        match extension {
+            Some("xrl") => self.load_xrl_file(file_path),
+            Some("xrdsl") => self.load_dsl_file(file_path),
+            _ => {
+                println!("⚠️ Unknown file extension, treating as DSL");
+                self.load_dsl_file(file_path)
+            }
+        }
+    }
+    
+    fn load_xrl_file(&mut self, file_path: &str) -> Result<Option<SceneUpdate>> {
+        println!("🔄 Loading XRL scene from: {}", file_path);
+        
+        let path = std::path::Path::new(file_path);
+        
+        // Initialize live runner if needed
+        if self.live_runner.is_none() {
+            let mut runner = crate::live_xrl_runner::LiveXrlRunner::new();
+            runner.set_live_mode(self.is_live_mode);
+            self.live_runner = Some(runner);
+        }
+        
+        let scene_data = if let Some(runner) = &mut self.live_runner {
+            if self.is_live_mode && self.last_scene_data.is_some() {
+                // Apply live update without restart
+                println!("[LIVE] Applying live update to {}", file_path);
+                runner.apply_live_update(path)?
+            } else {
+                // Full reload
+                println!("📦 Full reload of {}", file_path);
+                runner.load_xrl_file(path)?
+            }
+        } else {
+            return Ok(None);
+        };
+        
+        // Perform reconciliation if we have a previous scene
+        let update = if let Some(ref last_scene) = self.last_scene_data {
+            let changes = self.reconciler.diff_scenes(last_scene, &scene_data);
+            println!("🔍 Reconciliation found {} changes", changes.len());
+            SceneUpdate::Incremental { scene_data, changes }
+        } else {
+            println!("📦 Initial XRL scene load");
+            SceneUpdate::Full(scene_data)
+        };
+        
+        // Update stored scene
+        if let SceneUpdate::Full(ref data) = update {
+            self.last_scene_data = Some(data.clone());
+            self.reconciler.update_current_scene(data.clone());
+        } else if let SceneUpdate::Incremental { ref scene_data, .. } = update {
+            self.last_scene_data = Some(scene_data.clone());
+            self.reconciler.update_current_scene(scene_data.clone());
+        }
+        
+        Ok(Some(update))
+    }
+    
+    fn load_dsl_file(&mut self, file_path: &str) -> Result<Option<SceneUpdate>> {
+        println!("🔄 Reloading DSL scene from: {}", file_path);
         
         // Read the file
         let content = std::fs::read_to_string(file_path)?;

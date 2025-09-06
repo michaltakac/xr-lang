@@ -42,6 +42,8 @@ pub mod macro_system; // Hygienic macros with gensym support
 pub mod evaluator;    // Metacircular evaluator
 pub mod compiler;     // Bytecode compiler from S-expressions
 pub mod selective_persistence; // Fine-grained persistence policies
+pub mod live_image;   // True liveness support (Lisp/Smalltalk-style)
+pub mod meta;         // Meta-level architecture for introspection/modification
 
 // Cross-platform support modules
 pub mod image;        // Portable image structure for deployment
@@ -69,6 +71,7 @@ pub use macro_system::{MacroExpander, Macro};
 pub use evaluator::Evaluator;
 pub use compiler::Compiler;
 pub use selective_persistence::{SelectivePersistence, PersistencePolicy, PersistenceScope, PolicyBuilder};
+pub use live_image::{LiveImage, LiveEvaluator, LiveUpdate, LiveSnapshot};
 
 // Re-export cross-platform types
 pub use image::{XRLangImage, ImageBuilder, Platform, ImageMetadata};
