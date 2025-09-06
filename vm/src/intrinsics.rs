@@ -51,6 +51,28 @@ impl Vec3 {
             Value::Float(self.z as f64),
         ])
     }
+    
+    pub fn length(&self) -> f32 {
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+    }
+}
+
+use std::ops::{Add, Sub};
+
+impl Add for Vec3 {
+    type Output = Vec3;
+    
+    fn add(self, other: Vec3) -> Vec3 {
+        Vec3::new(self.x + other.x, self.y + other.y, self.z + other.z)
+    }
+}
+
+impl Sub for Vec3 {
+    type Output = Vec3;
+    
+    fn sub(self, other: Vec3) -> Vec3 {
+        Vec3::new(self.x - other.x, self.y - other.y, self.z - other.z)
+    }
 }
 
 /// Transform component
@@ -94,6 +116,7 @@ pub struct SceneState {
     pub next_id: u64,
     pub nodes: HashMap<ObjectId, SceneNode>,
     pub cameras: HashMap<ObjectId, Camera>,
+    pub active_camera: Option<ObjectId>,
 }
 
 impl SceneState {
@@ -102,10 +125,11 @@ impl SceneState {
             next_id: 1,
             nodes: HashMap::new(),
             cameras: HashMap::new(),
+            active_camera: None,
         }
     }
     
-    fn generate_id(&mut self) -> ObjectId {
+    pub fn generate_id(&mut self) -> ObjectId {
         let id = ObjectId(self.next_id);
         self.next_id += 1;
         id

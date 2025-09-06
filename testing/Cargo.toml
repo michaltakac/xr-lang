@@ -3,6 +3,10 @@ name = "xr-lang-testing"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "test_runner"
+path = "src/bin/test_runner.rs"
+
 [dependencies]
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -11,6 +15,7 @@ tokio = { version = "1.0", features = ["full"] }
 colored = "2.0"
 indicatif = "0.17"
 chrono = "0.4"
+tempfile = "3.8"
 
 # Internal dependencies
 dsl = { path = "../dsl" }

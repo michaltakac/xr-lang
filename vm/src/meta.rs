@@ -9,9 +9,8 @@
 //! - The Art of the Metaobject Protocol (AMOP)
 //! - Design Principles Behind Smalltalk
 
-use crate::value::{Value, Symbol, Environment, Closure};
-use crate::evaluator::Evaluator;
-use crate::live_image::{LiveImage, ExecutionContext, StackFrame, Continuation};
+use crate::value::{Value, Symbol};
+use crate::live_image::{LiveImage, ExecutionContext, StackFrame};
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::cell::RefCell;
@@ -419,7 +418,7 @@ pub fn register_meta_functions() -> HashMap<String, Rc<dyn Fn(&[Value]) -> Resul
     let mut functions = HashMap::new();
     
     // Introspection functions
-    functions.insert("methods-of".to_string(), Rc::new(|args| {
+    functions.insert("methods-of".to_string(), Rc::new(|args: &[Value]| {
         if args.len() != 1 {
             return Err("methods-of expects 1 argument".to_string());
         }
@@ -427,7 +426,7 @@ pub fn register_meta_functions() -> HashMap<String, Rc<dyn Fn(&[Value]) -> Resul
         Ok(Value::List(Vec::new()))
     }) as Rc<dyn Fn(&[Value]) -> Result<Value, String>>);
     
-    functions.insert("class-of".to_string(), Rc::new(|args| {
+    functions.insert("class-of".to_string(), Rc::new(|args: &[Value]| {
         if args.len() != 1 {
             return Err("class-of expects 1 argument".to_string());
         }
@@ -435,7 +434,7 @@ pub fn register_meta_functions() -> HashMap<String, Rc<dyn Fn(&[Value]) -> Resul
         Ok(Value::Symbol(Symbol("Object".to_string())))
     }) as Rc<dyn Fn(&[Value]) -> Result<Value, String>>);
     
-    functions.insert("inspect".to_string(), Rc::new(|args| {
+    functions.insert("inspect".to_string(), Rc::new(|args: &[Value]| {
         if args.len() != 1 {
             return Err("inspect expects 1 argument".to_string());
         }
@@ -444,12 +443,12 @@ pub fn register_meta_functions() -> HashMap<String, Rc<dyn Fn(&[Value]) -> Resul
         Ok(args[0].clone())
     }) as Rc<dyn Fn(&[Value]) -> Result<Value, String>>);
     
-    functions.insert("stack-trace".to_string(), Rc::new(|_args| {
+    functions.insert("stack-trace".to_string(), Rc::new(|_args: &[Value]| {
         // Return current stack trace
         Ok(Value::List(Vec::new()))
     }) as Rc<dyn Fn(&[Value]) -> Result<Value, String>>);
     
-    functions.insert("become".to_string(), Rc::new(|args| {
+    functions.insert("become".to_string(), Rc::new(|args: &[Value]| {
         if args.len() != 2 {
             return Err("become expects 2 arguments".to_string());
         }

@@ -1,4 +1,4 @@
-;; Live Demo - True Liveness Test
+;; Live Demo - True Liveness Test with Camera Preservation
 ;; 
 ;; This example demonstrates true liveness in XR-Lang.
 ;; You can modify this file while it's running and see changes
@@ -10,7 +10,8 @@
 ;; - The colors or sizes
 ;; All changes will be applied live!
 
-;; Create a camera
+;; Create a camera - it will auto-preserve position during live edits
+;; The runtime tracks camera movements and preserves them automatically
 (define camera (create-camera [0 5 15]))
 
 ;; Define rotation speed - CHANGE THIS WHILE RUNNING!
@@ -49,3 +50,16 @@
 ;; This will be called repeatedly and state will be preserved
 ;; even when you modify the code above!
 (increment-counter)
+
+;; AUTOMATIC CAMERA PRESERVATION:
+;; 
+;; The camera automatically preserves its position when you:
+;; 1. Move it with WASD/arrows or mouse
+;; 2. Edit any code and save
+;; 
+;; This follows the three-layer state model:
+;; - Source DSL: The (create-camera [0 5 15]) definition
+;; - Runtime Override: Your camera movements
+;; - Active State: The current camera position
+;;
+;; The runtime intelligently preserves user interactions!

@@ -1,0 +1,113 @@
+{
+  "duration_ms": 1,
+  "failed_test_names": [],
+  "failed_tests": 0,
+  "passed_tests": 8,
+  "tests": [
+    {
+      "assertions": 3,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "3/3 assertions passed",
+      "name": "Camera Creation Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 30,
+        "object_count": 3,
+        "parse_time_us": 18
+      }
+    },
+    {
+      "assertions": 2,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "2/2 assertions passed",
+      "name": "Camera Manipulation Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 3,
+        "object_count": 1,
+        "parse_time_us": 2
+      }
+    },
+    {
+      "assertions": 2,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "2/2 assertions passed",
+      "name": "Camera Utilities Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 78,
+        "object_count": 1,
+        "parse_time_us": 32
+      }
+    },
+    {
+      "assertions": 6,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "6/6 assertions passed",
+      "name": "Camera Switching Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 2,
+        "object_count": 3,
+        "parse_time_us": 2
+      }
+    },
+    {
+      "assertions": 8,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "8/8 assertions passed",
+      "name": "Basic Hot Reload Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 19,
+        "object_count": 3,
+        "parse_time_us": 12
+      }
+    },
+    {
+      "assertions": 7,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "7/7 assertions passed",
+      "name": "State Preservation Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 53,
+        "object_count": 5,
+        "parse_time_us": 24
+      }
+    },
+    {
+      "assertions": 10,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "10/10 assertions passed",
+      "name": "Scene Graph Introspection Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 44,
+        "object_count": 5,
+        "parse_time_us": 28
+      }
+    },
+    {
+      "assertions": 0,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "0/0 assertions passed",
+      "name": "Execution Trace Test",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 0,
+        "object_count": 0,
+        "parse_time_us": 0
+      }
+    }
+  ],
+  "total_tests": 8
+}

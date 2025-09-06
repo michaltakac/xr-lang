@@ -1,44 +1,20 @@
-;; Basic 3D Scene Example
-;; Demonstrates scene primitives from Stage A
+;; Basic 3D Scene - Visual Primitives
+;; Creates a simple scene with cubes and spheres you can see
 
-;; Create a camera positioned above and behind origin
+;; Camera positioned to view the scene
 (define camera (create-camera [0 5 20]))
 
-;; Create some cubes at different positions
-(define cube1 (create-cube [0 0 0]))
-(define cube2 (create-cube [3 0 0]))
-(define cube3 (create-cube [-3 0 0]))
+;; Create three cubes in a row - you'll see them lined up
+(define left-cube (create-cube [-4 0 0]))
+(define center-cube (create-cube [0 0 0]))
+(define right-cube (create-cube [4 0 0]))
 
-;; Create spheres
-(define sphere1 (create-sphere [0 2 0]))
-(define sphere2 (create-sphere [2 2 -2]))
+;; Visual transformations you can see:
+(rotate center-cube [0 45 0])     ; Center cube rotated 45 degrees
+(scale right-cube [2 0.5 2])      ; Right cube flattened
+(update-transform left-cube [-4 2 0]) ; Left cube floats up
 
-;; Transform objects
-(update-transform cube2 [3 10 0])  ; Move cube2 up
-(rotate cube1 [0 45 0])           ; Rotate cube1 around Y axis
-(scale cube3 [2 0.5 2])           ; Scale cube3
-
-;; Get position of an object
-(define cube1-pos (get-position cube1))
-
-;; Create a grid of cubes
-(define make-grid
-  (lambda (size)
-    (define make-row
-      (lambda (x z count)
-        (if (< count size)
-            (begin
-              (create-cube [x 0 z])
-              (make-row (+ x 2) z (+ count 1)))
-            nil)))
-    (define make-grid-helper
-      (lambda (z count)
-        (if (< count size)
-            (begin
-              (make-row (- 0 size) z 0)
-              (make-grid-helper (+ z 2) (+ count 1)))
-            nil)))
-    (make-grid-helper (- 0 size) 0)))
-
-;; Create a 3x3 grid
-(make-grid 3)
+;; Add spheres above - creates a visual hierarchy
+(define sphere1 (create-sphere [0 3 0]))
+(define sphere2 (create-sphere [-2 3 0]))
+(scale sphere1 [1.5 1.5 1.5])     ; Bigger sphere in center

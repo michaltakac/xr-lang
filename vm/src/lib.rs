@@ -36,6 +36,8 @@ pub mod bytecode;     // Stack-based bytecode VM
 pub mod persistence;  // Journal & snapshot store
 pub mod parser;       // EDN-like S-expression parser
 pub mod intrinsics;   // Scene primitives as native functions
+pub mod intrinsics_camera; // Enhanced camera intrinsics
+pub mod test_framework; // Headless testing framework
 
 // Stage B: Homoiconic Core
 pub mod macro_system; // Hygienic macros with gensym support

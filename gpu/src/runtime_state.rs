@@ -48,7 +48,7 @@ impl Default for RuntimeState {
             camera_overrides: None,
             object_overrides: HashMap::new(),
             preserve_flags: HashMap::new(),
-            authoring_mode: AuthoringMode::Design,
+            authoring_mode: AuthoringMode::Play,  // Default to Play mode for camera preservation
         }
     }
 }

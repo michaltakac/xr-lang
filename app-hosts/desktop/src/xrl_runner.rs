@@ -58,6 +58,39 @@ impl XrlRunner {
         // Extract scene data from VM and convert to GPU format
         let mut scene_data = SceneData::default();
         
+        // Add default camera controls for XRL scenes
+        scene_data.input = Some(gpu::scene::InputData {
+            camera_controls: Some(gpu::scene::CameraControlsData {
+                move_speed: 5.0,
+                rotate_speed: 2.0,
+                movement_keys: gpu::scene::MovementKeysData {
+                    forward: "W".to_string(),
+                    backward: "S".to_string(),
+                    left: "A".to_string(),
+                    right: "D".to_string(),
+                    up: "Space".to_string(),
+                    down: "Shift".to_string(),
+                },
+                rotation_keys: gpu::scene::RotationKeysData {
+                    pitch_up: "Up".to_string(),
+                    pitch_down: "Down".to_string(),
+                    yaw_left: "Left".to_string(),
+                    yaw_right: "Right".to_string(),
+                },
+                orbit_controls: Some(gpu::scene::OrbitControlsData {
+                    enabled: true,
+                    sensitivity: 1.0,
+                    damping: 0.05,
+                    min_distance: 1.0,
+                    max_distance: 50.0,
+                    min_polar_angle: 0.1,
+                    max_polar_angle: 3.0,
+                    enable_zoom: true,
+                    zoom_speed: 1.0,
+                }),
+            }),
+        });
+        
         SCENE.with(|scene| {
             let scene = scene.borrow();
             

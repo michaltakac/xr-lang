@@ -4,8 +4,9 @@
 //! that can interpret XR-Lang code. This proves the language is complete
 //! and self-describing.
 
-use crate::value::{Value, Symbol, Environment, Closure, NativeFn};
+use crate::value::{Value, Symbol, Environment, Closure};
 use crate::macro_system::MacroExpander;
+use crate::intrinsics_camera;
 use std::rc::Rc;
 use std::collections::HashMap;
 
@@ -187,10 +188,70 @@ impl Evaluator {
             })
         ));
 
+        env.bind(Symbol("<=".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                if args.len() != 2 {
+                    return Err("<= expects exactly 2 arguments".to_string());
+                }
+                
+                match (&args[0], &args[1]) {
+                    (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
+                    (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a <= b)),
+                    (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) <= *b)),
+                    (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a <= (*b as f64))),
+                    _ => Err("<= expects numbers".to_string()),
+                }
+            })
+        ));
+
+        env.bind(Symbol(">".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                if args.len() != 2 {
+                    return Err("> expects exactly 2 arguments".to_string());
+                }
+                
+                match (&args[0], &args[1]) {
+                    (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a > b)),
+                    (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a > b)),
+                    (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) > *b)),
+                    (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a > (*b as f64))),
+                    _ => Err("> expects numbers".to_string()),
+                }
+            })
+        ));
+
+        env.bind(Symbol(">=".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                if args.len() != 2 {
+                    return Err(">= expects exactly 2 arguments".to_string());
+                }
+                
+                match (&args[0], &args[1]) {
+                    (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a >= b)),
+                    (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a >= b)),
+                    (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) >= *b)),
+                    (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a >= (*b as f64))),
+                    _ => Err(">= expects numbers".to_string()),
+                }
+            })
+        ));
+
         // List construction
         env.bind(Symbol("list".to_string()), Value::NativeFunction(
             Rc::new(|args| {
                 Ok(Value::List(args.to_vec()))
+            })
+        ));
+        
+        // I/O primitives
+        env.bind(Symbol("println".to_string()), Value::NativeFunction(
+            Rc::new(|args| {
+                let output = args.iter()
+                    .map(|v| format!("{}", v))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                println!("{}", output);
+                Ok(Value::Nil)
             })
         ));
         
@@ -355,6 +416,12 @@ impl Evaluator {
         // Register scene intrinsics
         let scene_intrinsics = crate::intrinsics::register_scene_intrinsics();
         for (name, func) in scene_intrinsics {
+            env.bind(Symbol(name), Value::NativeFunction(func));
+        }
+        
+        // Register camera intrinsics
+        let camera_intrinsics = crate::intrinsics_camera::register_camera_intrinsics();
+        for (name, func) in camera_intrinsics {
             env.bind(Symbol(name), Value::NativeFunction(func));
         }
         
