@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XR-Lang: A Meta-Medium for Explorable Programming</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['IBM Plex Sans', 'system-ui', 'sans-serif'],
+                        'mono': ['IBM Plex Mono', 'monospace'],
+                    },
+                    typography: {
+                        DEFAULT: {
+                            css: {
+                                maxWidth: '680px',
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style type="text/tailwindcss">
+        @layer components {
+            .code-lisp .comment { @apply text-gray-500 italic; }
+            .code-lisp .keyword { @apply text-red-600 font-medium; }
+            .code-lisp .symbol { @apply text-blue-600; }
+            .code-lisp .string { @apply text-green-700; }
+            .code-lisp .number { @apply text-blue-600; }
+            .code-lisp .paren { @apply text-gray-600; }
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-900 font-sans antialiased">
+    <header class="border-b border-gray-200 py-12 mb-12">
+        <div class="max-w-3xl mx-auto px-6">
+            <h1 class="text-4xl font-bold tracking-tight mb-2">XR-Lang</h1>
+            <p class="text-xl text-gray-600 italic">The love child of a Lisp Machine and a Smalltalk environment, raised in VR</p>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-6">
+        <section class="mb-16">
+            <p class="text-xl leading-relaxed mb-6 text-gray-800">Programming hasn't fundamentally changed since the 1970s. We still write text files and compile them. We still debug by printing statements. We still treat code as something separate from the systems it creates.</p>
+            <p class="text-xl leading-relaxed text-gray-800">XR-Lang changes that. It's a programming language where the code, the environment, and the created world are one living system. Where you can reach out and touch your data structures. Where time itself becomes a debuggable dimension.</p>
+        </section>
+
+        <section class="mb-16">
+            <h2 class="text-3xl font-semibold mb-8 tracking-tight">Articles</h2>
+            
+            <article class="mb-12 pb-12 border-b border-gray-200">
+                <h3 class="text-2xl font-semibold mb-2 tracking-tight">
+                    <a href="posts/why-3d-changes-everything.html" class="text-gray-900 hover:text-blue-600 transition-colors">Why Programming in 3D Changes Everything</a>
+                </h3>
+                <p class="text-gray-500 text-sm mb-4">September 6, 2025</p>
+                <p class="text-lg leading-relaxed mb-4 text-gray-700">For fifty years, we've been programming on flat screens, thinking in flat abstractions. We've gotten so used to this constraint that we've forgotten it's a constraint at all. But what happens when you can walk through your codebase? When you can see data flow in three dimensions? When the distance between thinking and doing collapses to zero?</p>
+                <a href="posts/why-3d-changes-everything.html" class="text-blue-600 hover:text-blue-700 font-medium transition-colors">Read more →</a>
+            </article>
+
+            <article class="mb-12 pb-12 border-b border-gray-200">
+                <h3 class="text-2xl font-semibold mb-2 tracking-tight">
+                    <a href="posts/the-meta-medium.html" class="text-gray-900 hover:text-blue-600 transition-colors">The Meta-Medium We've Been Waiting For</a>
+                </h3>
+                <p class="text-gray-500 text-sm mb-4">September 6, 2025</p>
+                <p class="text-lg leading-relaxed mb-4 text-gray-700">Alan Kay once described the computer as a meta-medium—a medium that can become any other medium. But we've never quite achieved that vision. Our tools remain stubbornly separate from what they create. XR-Lang is different. It's a language that can rewrite itself, understand itself, and evolve itself. And now, with AI, it can even have conversations about what it should become.</p>
+                <a href="posts/the-meta-medium.html" class="text-blue-600 hover:text-blue-700 font-medium transition-colors">Read more →</a>
+            </article>
+
+            <article class="mb-12">
+                <h3 class="text-2xl font-semibold mb-2 tracking-tight">
+                    <a href="posts/homoiconicity-meets-xr.html" class="text-gray-900 hover:text-blue-600 transition-colors">How Homoiconicity Meets Extended Reality</a>
+                </h3>
+                <p class="text-gray-500 text-sm mb-4">September 6, 2025</p>
+                <p class="text-lg leading-relaxed mb-4 text-gray-700">Lisp programmers have known a secret for decades: when code and data share the same representation, magical things become possible. Programs that write programs. Systems that evolve. Ideas that compile themselves. But what happens when you combine this power with spatial computing? When your macros don't just transform code, but transform reality itself?</p>
+                <a href="posts/homoiconicity-meets-xr.html" class="text-blue-600 hover:text-blue-700 font-medium transition-colors">Read more →</a>
+            </article>
+        </section>
+
+        <section class="bg-gray-50 rounded-lg p-8 mb-12">
+            <h2 class="text-2xl font-semibold mb-4">Get Started</h2>
+            <p class="text-lg mb-6 text-gray-700">XR-Lang is currently in active development. Follow the project on <a href="https://github.com/questspace/xr-lang" target="_blank" class="text-blue-600 hover:text-blue-700 underline">GitHub</a> to track progress and contribute.</p>
+            <div class="bg-gray-900 rounded-lg p-6 overflow-x-auto">
+                <pre class="text-sm"><code class="code-lisp text-gray-100"><span class="comment">; Your first XR-Lang scene</span>
+<span class="paren">(</span><span class="keyword">defscene3d</span> <span class="symbol">hello-world</span>
+  <span class="paren">(</span><span class="symbol">camera</span> 
+    <span class="paren">(</span><span class="symbol">position</span> <span class="number">0</span> <span class="number">5</span> <span class="number">10</span><span class="paren">)</span>
+    <span class="paren">(</span><span class="symbol">meta</span> <span class="keyword">preserve-runtime</span><span class="paren">))</span>
+  
+  <span class="paren">(</span><span class="symbol">cube</span>
+    <span class="paren">(</span><span class="symbol">position</span> <span class="number">0</span> <span class="number">0</span> <span class="number">0</span><span class="paren">)</span>
+    <span class="paren">(</span><span class="symbol">behavior</span> 
+      <span class="paren">(</span><span class="keyword">on-click</span> <span class="paren">[]</span>
+        <span class="paren">(</span><span class="symbol">rotate</span> <span class="keyword">:y</span> <span class="number">45</span><span class="paren">)))))</span></code></pre>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-gray-200 py-12 mt-16">
+        <div class="max-w-3xl mx-auto px-6">
+            <p class="text-gray-600 text-center">&copy; 2024 XR-Lang Project. Built with curiosity and caffeine.</p>
+        </div>
+    </footer>
+</body>
+</html>

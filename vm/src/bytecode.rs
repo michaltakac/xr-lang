@@ -5,6 +5,7 @@
 //! Initially focusing on correctness over performance.
 
 use crate::value::{Value, Symbol, Environment};
+use crate::capability::CapabilityTable;
 use std::rc::Rc;
 
 /// Bytecode instructions for the stack-based VM
@@ -68,6 +69,21 @@ pub enum OpCode {
     // Debug operations
     Print,                 // Print top of stack
     Trace,                 // Enable/disable tracing
+    
+    // Capability operations
+    CallCapability {       // Call a platform capability
+        capability: String,
+        method: String,
+        arg_count: usize,
+    },
+}
+
+/// Bytecode with source location information
+#[derive(Debug, Clone)]
+pub struct ByteCode {
+    pub op: OpCode,
+    pub line: usize,
+    pub column: usize,
 }
 
 /// Virtual machine state
@@ -79,7 +95,7 @@ pub struct VM {
     pc: usize,
     
     /// Current bytecode being executed
-    code: Vec<OpCode>,
+    code: Vec<ByteCode>,
     
     /// Environment for variable bindings
     env: Rc<Environment>,
@@ -89,6 +105,9 @@ pub struct VM {
     
     /// Trace execution flag
     trace: bool,
+    
+    /// Platform capability table
+    capabilities: Option<Rc<CapabilityTable>>,
 }
 
 /// Represents a function call frame
@@ -108,11 +127,19 @@ impl VM {
             env: Rc::new(Environment::new()),
             call_stack: Vec::with_capacity(64),
             trace: false,
+            capabilities: None,
         }
     }
     
+    /// Create a new VM with capability table
+    pub fn with_capabilities(capabilities: Rc<CapabilityTable>) -> Self {
+        let mut vm = Self::new();
+        vm.capabilities = Some(capabilities);
+        vm
+    }
+    
     /// Execute bytecode with given environment
-    pub fn execute(&mut self, code: Vec<OpCode>, env: Option<Rc<Environment>>) -> Result<Value, String> {
+    pub fn execute(&mut self, code: Vec<ByteCode>, env: Option<Rc<Environment>>) -> Result<Value, String> {
         self.code = code;
         self.pc = 0;
         self.stack.clear();
@@ -129,7 +156,7 @@ impl VM {
                 eprintln!("[{:04}] {:?} | Stack: {:?}", self.pc, self.code[self.pc], self.stack);
             }
             
-            match self.code[self.pc].clone() {
+            match self.code[self.pc].op.clone() {
                 OpCode::Push(val) => {
                     self.stack.push(val);
                     self.pc += 1;
@@ -300,6 +327,24 @@ impl VM {
                     self.pc += 1;
                 }
                 
+                OpCode::CallCapability { capability, method, arg_count } => {
+                    if self.capabilities.is_none() {
+                        return Err("No capability table available".to_string());
+                    }
+                    
+                    let mut args = Vec::with_capacity(arg_count);
+                    for _ in 0..arg_count {
+                        args.insert(0, self.stack.pop().ok_or("Stack underflow")?);
+                    }
+                    
+                    let result = self.capabilities.as_ref().unwrap()
+                        .call(&capability, &method, args)
+                        .map_err(|e| format!("Capability error: {}", e))?;
+                    
+                    self.stack.push(result);
+                    self.pc += 1;
+                }
+                
                 OpCode::Cons => {
                     let b = self.stack.pop().ok_or("Stack underflow")?;
                     let a = self.stack.pop().ok_or("Stack underflow")?;
@@ -330,7 +375,7 @@ impl VM {
                 
                 // TODO: Implement remaining opcodes
                 _ => {
-                    return Err(format!("Unimplemented opcode: {:?}", self.code[self.pc]));
+                    return Err(format!("Unimplemented opcode: {:?}", self.code[self.pc].op));
                 }
             }
         }
@@ -348,9 +393,9 @@ mod tests {
     fn test_arithmetic() {
         let mut vm = VM::new();
         let code = vec![
-            OpCode::Push(Value::Int(5)),
-            OpCode::Push(Value::Int(3)),
-            OpCode::Add,
+            ByteCode { op: OpCode::Push(Value::Int(5)), line: 1, column: 1 },
+            ByteCode { op: OpCode::Push(Value::Int(3)), line: 1, column: 3 },
+            ByteCode { op: OpCode::Add, line: 1, column: 5 },
         ];
         let result = vm.execute(code, None).unwrap();
         assert_eq!(result, Value::Int(8));
@@ -360,9 +405,9 @@ mod tests {
     fn test_comparison() {
         let mut vm = VM::new();
         let code = vec![
-            OpCode::Push(Value::Int(5)),
-            OpCode::Push(Value::Int(3)),
-            OpCode::Lt,
+            ByteCode { op: OpCode::Push(Value::Int(5)), line: 1, column: 1 },
+            ByteCode { op: OpCode::Push(Value::Int(3)), line: 1, column: 3 },
+            ByteCode { op: OpCode::Lt, line: 1, column: 5 },
         ];
         let result = vm.execute(code, None).unwrap();
         assert_eq!(result, Value::Bool(false));
@@ -372,11 +417,42 @@ mod tests {
     fn test_list_operations() {
         let mut vm = VM::new();
         let code = vec![
-            OpCode::Push(Value::Int(1)),
-            OpCode::Push(Value::List(vec![Value::Int(2), Value::Int(3)])),
-            OpCode::Cons,
+            ByteCode { op: OpCode::Push(Value::Int(1)), line: 1, column: 1 },
+            ByteCode { op: OpCode::Push(Value::List(vec![Value::Int(2), Value::Int(3)])), line: 1, column: 3 },
+            ByteCode { op: OpCode::Cons, line: 1, column: 5 },
         ];
         let result = vm.execute(code, None).unwrap();
         assert_eq!(result, Value::List(vec![Value::Int(1), Value::Int(2), Value::Int(3)]));
+    }
+    
+    #[test]
+    fn test_capability_call() {
+        use crate::capability::{create_platform_capabilities, DeviceType};
+        
+        let capabilities = Rc::new(create_platform_capabilities(DeviceType::Desktop));
+        let mut vm = VM::with_capabilities(capabilities);
+        
+        let code = vec![
+            ByteCode { 
+                op: OpCode::Push(Value::Float(2.0)), 
+                line: 1, column: 1 
+            },
+            ByteCode { 
+                op: OpCode::CallCapability {
+                    capability: "scene".to_string(),
+                    method: "create_cube".to_string(),
+                    arg_count: 1,
+                }, 
+                line: 1, column: 5 
+            },
+        ];
+        
+        let result = vm.execute(code, None).unwrap();
+        if let Value::Map(map) = result {
+            assert_eq!(map.get("type"), Some(&Value::Str("cube".to_string())));
+            assert_eq!(map.get("size"), Some(&Value::Float(2.0)));
+        } else {
+            panic!("Expected Map result from capability call");
+        }
     }
 }

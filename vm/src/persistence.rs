@@ -452,6 +452,35 @@ pub struct PersistenceLayer {
     current_state: State,
 }
 
+/// Image persistence - serializable state for cross-platform deployment
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImagePersistence {
+    pub journal_entries: Vec<SerializableJournalEntry>,
+    pub snapshots: Vec<SerializableSnapshot>,
+    pub current_branch: BranchId,
+    pub branches: HashMap<BranchId, Vec<SerializableJournalEntry>>,
+}
+
+/// Serializable version of JournalEntry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerializableJournalEntry {
+    pub timestamp: u64,
+    pub author: Author,
+    pub change_type: String,
+    pub change_data: Vec<u8>,
+    pub provenance: Provenance,
+    pub metadata: HashMap<String, Vec<u8>>,
+}
+
+/// Serializable version of Snapshot
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerializableSnapshot {
+    pub id: SnapshotId,
+    pub timestamp: u64,
+    pub state_data: Vec<u8>,
+    pub metadata: HashMap<String, Vec<u8>>,
+}
+
 impl PersistenceLayer {
     /// Create a new persistence layer
     pub fn new() -> Self {
@@ -494,6 +523,112 @@ impl PersistenceLayer {
         let id = snapshot.id.clone();
         self.snapshots.add(snapshot);
         id
+    }
+    
+    /// Export persistence state for image serialization
+    pub fn export_snapshot(&self) -> Result<Vec<u8>, String> {
+        let image_persistence = ImagePersistence {
+            journal_entries: self.journal.entries.iter()
+                .map(|e| self.journal_entry_to_serializable(e))
+                .collect(),
+            snapshots: self.snapshots.snapshots.iter()
+                .map(|s| self.snapshot_to_serializable(s))
+                .collect(),
+            current_branch: self.journal.current_branch.clone(),
+            branches: self.journal.branches.iter()
+                .map(|(id, entries)| {
+                    (id.clone(), entries.iter()
+                        .map(|e| self.journal_entry_to_serializable(e))
+                        .collect())
+                })
+                .collect(),
+        };
+        
+        bincode::serialize(&image_persistence)
+            .map_err(|e| format!("Failed to serialize persistence: {}", e))
+    }
+    
+    /// Import persistence state from image
+    pub fn import_snapshot(data: &[u8]) -> Result<Self, String> {
+        let image_persistence: ImagePersistence = bincode::deserialize(data)
+            .map_err(|e| format!("Failed to deserialize persistence: {}", e))?;
+        
+        let mut persistence = PersistenceLayer::new();
+        
+        // Restore journal entries
+        persistence.journal.entries = image_persistence.journal_entries.iter()
+            .map(|e| Self::serializable_to_journal_entry(e))
+            .collect::<Result<Vec<_>, _>>()?;
+        
+        // Restore snapshots
+        persistence.snapshots.snapshots = image_persistence.snapshots.iter()
+            .map(|s| Self::serializable_to_snapshot(s))
+            .collect::<Result<Vec<_>, _>>()?;
+        
+        // Restore branches
+        persistence.journal.current_branch = image_persistence.current_branch;
+        persistence.journal.branches = image_persistence.branches.iter()
+            .map(|(id, entries)| {
+                let entries = entries.iter()
+                    .map(|e| Self::serializable_to_journal_entry(e))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((id.clone(), entries))
+            })
+            .collect::<Result<HashMap<_, _>, String>>()?;
+        
+        // Rebuild current state from journal
+        persistence.current_state = persistence.journal.replay_to(u64::MAX);
+        
+        Ok(persistence)
+    }
+    
+    fn journal_entry_to_serializable(&self, entry: &JournalEntry) -> SerializableJournalEntry {
+        SerializableJournalEntry {
+            timestamp: entry.timestamp,
+            author: entry.author.clone(),
+            change_type: format!("{:?}", entry.change),
+            change_data: format!("{:?}", entry.change).into_bytes(),  // Simple serialization
+            provenance: entry.provenance.clone(),
+            metadata: entry.metadata.iter()
+                .map(|(k, v)| (k.clone(), format!("{:?}", v).into_bytes()))
+                .collect(),
+        }
+    }
+    
+    fn serializable_to_journal_entry(entry: &SerializableJournalEntry) -> Result<JournalEntry, String> {
+        // For now, create a placeholder change - proper deserialization would be implemented
+        let change = Change::Create {
+            path: ValuePath::root(),
+            value: Value::Nil,
+        };
+        
+        Ok(JournalEntry {
+            timestamp: entry.timestamp,
+            author: entry.author.clone(),
+            change,
+            provenance: entry.provenance.clone(),
+            metadata: HashMap::new(),  // Simplified for now
+        })
+    }
+    
+    fn snapshot_to_serializable(&self, snapshot: &Snapshot) -> SerializableSnapshot {
+        SerializableSnapshot {
+            id: snapshot.id.clone(),
+            timestamp: snapshot.timestamp,
+            state_data: format!("{:?}", snapshot.state).into_bytes(),  // Simple serialization
+            metadata: snapshot.metadata.iter()
+                .map(|(k, v)| (k.clone(), format!("{:?}", v).into_bytes()))
+                .collect(),
+        }
+    }
+    
+    fn serializable_to_snapshot(snapshot: &SerializableSnapshot) -> Result<Snapshot, String> {
+        Ok(Snapshot {
+            id: snapshot.id.clone(),
+            timestamp: snapshot.timestamp,
+            state: HashMap::new(),  // Simplified for now
+            metadata: HashMap::new(),  // Simplified for now
+        })
     }
 }
 

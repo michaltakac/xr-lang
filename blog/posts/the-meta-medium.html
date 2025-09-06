@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Meta-Medium We've Been Waiting For - XR-Lang</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['IBM Plex Sans', 'system-ui', 'sans-serif'],
+                        'mono': ['IBM Plex Mono', 'monospace'],
+                    },
+                    typography: (theme) => ({
+                        DEFAULT: {
+                            css: {
+                                color: theme('colors.gray.700'),
+                                maxWidth: 'none',
+                            }
+                        }
+                    })
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style type="text/tailwindcss">
+        @layer components {
+            .prose-custom h2 { @apply text-2xl font-semibold mt-12 mb-6 text-gray-900; }
+            .prose-custom p { @apply mb-6 text-lg leading-relaxed; }
+            .prose-custom ol { @apply mb-6 pl-8 list-decimal; }
+            .prose-custom ul { @apply mb-6 pl-8 list-disc; }
+            .prose-custom li { @apply mb-2 text-lg; }
+            .prose-custom strong { @apply font-semibold; }
+            .prose-custom em { @apply italic; }
+            .prose-custom a { @apply text-blue-600 hover:text-blue-700 underline; }
+            .code-block { @apply bg-gray-100 border border-gray-300 rounded-lg overflow-hidden my-8; }
+            .code-lisp .comment { @apply text-gray-500 italic; }
+            .code-lisp .keyword { @apply text-red-600 font-medium; }
+            .code-lisp .symbol { @apply text-blue-600; }
+            .code-lisp .string { @apply text-green-700; }
+            .code-lisp .number { @apply text-blue-600; }
+            .code-lisp .paren { @apply text-gray-600; }
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-900 font-sans antialiased">
+    <header class="border-b border-gray-200 py-8 mb-12">
+        <div class="max-w-3xl mx-auto px-6">
+            <h1 class="text-3xl font-bold tracking-tight"><a href="../index.html" class="text-gray-900 hover:text-blue-600 transition-colors">XR-Lang</a></h1>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-6">
+        <article class="prose-custom">
+            <h1 class="text-4xl font-bold tracking-tight mb-2 text-gray-900">The Meta-Medium We've Been Waiting For</h1>
+            <p class="text-gray-500 mb-8">December 2024</p>
+
+            <p>Alan Kay once described the computer as a meta-medium—a medium that can become any other medium. But we've never quite achieved that vision. Our tools remain stubbornly separate from what they create. Photoshop isn't made of photographs. Word isn't made of words. Our programming languages aren't made of programs.</p>
+
+            <p>XR-Lang is different. It's a language that can rewrite itself, understand itself, and evolve itself. And now, with AI, it can even have conversations about what it should become.</p>
+
+            <h2>The Bootstrap Problem</h2>
+
+            <p>Every programming language faces a bootstrap problem: you need a language to implement the language. Most solve this by implementing the core in C or C++, then building abstractions on top. It works, but it creates a fundamental divide. There's the language you use and the language it's made of. They're different worlds with different rules.</p>
+
+            <p>Lisp solved this differently. In Lisp, you can write eval in Lisp itself—a function that interprets Lisp code, running on top of Lisp. It's called a metacircular evaluator, and it's more than a clever trick. It's proof that the language is complete, that it contains everything needed to describe itself.</p>
+
+            <p>XR-Lang takes this idea and runs with it:</p>
+
+            <div class="code-block">
+                <pre class="p-6"><code class="code-lisp text-sm font-mono"><span class="paren">(</span><span class="keyword">defn</span> <span class="symbol">eval</span> <span class="paren">[</span><span class="symbol">expr</span> <span class="symbol">env</span><span class="paren">]</span>
+  <span class="paren">(</span><span class="keyword">cond</span>
+    <span class="paren">(</span><span class="symbol">symbol?</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="paren">(</span><span class="symbol">lookup</span> <span class="symbol">expr</span> <span class="symbol">env</span><span class="paren">)</span>
+    <span class="paren">(</span><span class="symbol">atom?</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="symbol">expr</span>
+    <span class="paren">(</span><span class="symbol">list?</span> <span class="symbol">expr</span><span class="paren">)</span>
+    <span class="paren">(</span><span class="keyword">case</span> <span class="paren">(</span><span class="symbol">first</span> <span class="symbol">expr</span><span class="paren">)</span>
+      <span class="symbol">'quote</span> <span class="paren">(</span><span class="symbol">second</span> <span class="symbol">expr</span><span class="paren">)</span>
+      <span class="symbol">'if</span> <span class="paren">(</span><span class="keyword">if</span> <span class="paren">(</span><span class="symbol">eval</span> <span class="paren">(</span><span class="symbol">second</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="symbol">env</span><span class="paren">)</span>
+            <span class="paren">(</span><span class="symbol">eval</span> <span class="paren">(</span><span class="symbol">third</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="symbol">env</span><span class="paren">)</span>
+            <span class="paren">(</span><span class="symbol">eval</span> <span class="paren">(</span><span class="symbol">fourth</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="symbol">env</span><span class="paren">))</span>
+      <span class="symbol">'lambda</span> <span class="paren">(</span><span class="symbol">make-closure</span> <span class="paren">(</span><span class="symbol">second</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="paren">(</span><span class="symbol">cddr</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="symbol">env</span><span class="paren">)</span>
+      <span class="paren">(</span><span class="symbol">apply</span> <span class="paren">(</span><span class="symbol">eval</span> <span class="paren">(</span><span class="symbol">first</span> <span class="symbol">expr</span><span class="paren">)</span> <span class="symbol">env</span><span class="paren">)</span>
+             <span class="paren">(</span><span class="symbol">map</span> <span class="symbol">#</span><span class="paren">(</span><span class="symbol">eval</span> <span class="symbol">%</span> <span class="symbol">env</span><span class="paren">)</span> <span class="paren">(</span><span class="symbol">rest</span> <span class="symbol">expr</span><span class="paren">))))))</span></code></pre>
+            </div>
+
+            <p>This eval function, written in XR-Lang, can evaluate XR-Lang code. Including itself. It's turtles all the way down, except the turtles are programs, and they're all the same turtle.</p>
+
+            <p>But here's where XR-Lang goes beyond traditional Lisp: this eval function isn't just text. In the 3D environment, it's a living object you can inspect, modify, and watch execute. When it evaluates code, you see the abstract syntax tree materialize in space. When it recurses, you watch it descend through layers of evaluation. The metacircular evaluator becomes a navigable space.</p>
+
+            <h2>When Programs Write Programs</h2>
+
+            <p>Once a language can describe itself, it can modify itself. This is the power of macros—code that writes code. But XR-Lang takes this further. Programs don't just write programs; they evolve them, learn from them, and converse about them.</p>
+
+            <p>Consider this self-modifying scene:</p>
+
+            <div class="code-block">
+                <pre class="p-6"><code class="code-lisp text-sm font-mono"><span class="paren">(</span><span class="keyword">defscene3d</span> <span class="symbol">evolving-world</span>
+  <span class="paren">(</span><span class="symbol">entity</span> <span class="symbol">adaptive-cube</span>
+    <span class="paren">(</span><span class="symbol">transform</span> <span class="keyword">:position</span> <span class="paren">[</span><span class="number">0</span> <span class="number">0</span> <span class="number">0</span><span class="paren">])</span>
+    <span class="paren">(</span><span class="symbol">behavior</span>
+      <span class="paren">(</span><span class="keyword">on-interaction</span> <span class="paren">[</span><span class="symbol">pattern</span><span class="paren">]</span>
+        <span class="paren">(</span><span class="keyword">let</span> <span class="paren">[</span><span class="symbol">my-code</span> <span class="paren">(</span><span class="symbol">get-my-source</span><span class="paren">)</span>
+              <span class="symbol">evolved</span> <span class="paren">(</span><span class="symbol">learn-from-pattern</span> <span class="symbol">pattern</span> <span class="symbol">my-code</span><span class="paren">)]</span>
+          <span class="paren">(</span><span class="symbol">rewrite-source!</span> <span class="paren">(</span><span class="symbol">path-to-me</span><span class="paren">)</span> <span class="symbol">evolved</span><span class="paren">))))))</span></code></pre>
+            </div>
+
+            <p>This cube learns. Not through some external machine learning system, but by rewriting its own source code based on how users interact with it. Each interaction is a lesson. Each lesson modifies the program. The program becomes what you teach it to become.</p>
+
+            <p>This isn't theoretical. I've watched systems evolve from simple geometric shapes into complex, responsive environments, shaped entirely by interaction. No programmer wrote the final code. It emerged from the conversation between human and program.</p>
+
+            <h2>The AI Collaboration Layer</h2>
+
+            <p>We've been thinking about AI assistants wrong. We treat them like better autocomplete, generating snippets of code we then paste into our files. But what if the AI could see what you see, work in the same space, understand the living system you're building?</p>
+
+            <p>In XR-Lang, AI isn't a chatbot on the side—it's a presence in the space:</p>
+
+            <div class="code-block">
+                <pre class="p-6"><code class="code-lisp text-sm font-mono"><span class="paren">(</span><span class="keyword">defai</span> <span class="symbol">assistant</span>
+  <span class="keyword">:model</span> <span class="string">"claude-3-opus"</span>
+  <span class="keyword">:memory</span> <span class="paren">(</span><span class="symbol">persistent-store</span> <span class="string">"assistant.mem"</span><span class="paren">)</span>
+  <span class="keyword">:personality</span> <span class="string">"collaborative precise creative"</span>
+  
+  <span class="paren">(</span><span class="keyword">on-request</span> <span class="paren">[</span><span class="symbol">intent</span> <span class="symbol">context</span><span class="paren">]</span>
+    <span class="paren">(</span><span class="keyword">case</span> <span class="paren">(</span><span class="keyword">:type</span> <span class="symbol">intent</span><span class="paren">)</span>
+      <span class="keyword">:generate</span> <span class="paren">(</span><span class="symbol">generate-code-proposal</span> <span class="symbol">intent</span> <span class="symbol">context</span><span class="paren">)</span>
+      <span class="keyword">:explain</span> <span class="paren">(</span><span class="symbol">explain-with-visualization</span> <span class="symbol">intent</span> <span class="symbol">context</span><span class="paren">)</span>
+      <span class="keyword">:evolve</span> <span class="paren">(</span><span class="symbol">suggest-evolution-path</span> <span class="symbol">intent</span> <span class="symbol">context</span><span class="paren">)</span>
+      <span class="keyword">:debug</span> <span class="paren">(</span><span class="symbol">analyze-problem</span> <span class="symbol">intent</span> <span class="symbol">context</span><span class="paren">))))</span></code></pre>
+            </div>
+
+            <p>When you say "make this respond to sound," the AI doesn't just generate code—it understands the spatial context, sees the existing connections, and proposes modifications that integrate naturally. The proposals appear as ghostly previews you can accept, modify, or discuss further.</p>
+
+            <p>But the real magic happens when the AI learns your style. It remembers previous sessions, understands your patterns, anticipates your needs. It's not just generating code; it's participating in the creative process.</p>
+
+            <h2>The Three Layers of Reality</h2>
+
+            <p>Traditional programming has a schizophrenic relationship with state. There's the code (what you wrote), the runtime (what's happening now), and usually nothing in between. When you restart, everything resets. Your carefully configured test environment vanishes. Your debugging setup disappears.</p>
+
+            <p>XR-Lang solves this with three persistent layers:</p>
+
+            <ol>
+                <li><strong>Source DSL</strong>: The canonical definition of your system</li>
+                <li><strong>Runtime Overrides</strong>: Live modifications and experiments</li>
+                <li><strong>Active State</strong>: The current executing reality</li>
+            </ol>
+
+            <p>Each layer can influence the others:</p>
+
+            <div class="code-block">
+                <pre class="p-6"><code class="code-lisp text-sm font-mono"><span class="paren">(</span><span class="keyword">defscene3d</span> <span class="symbol">persistent-workspace</span>
+  <span class="comment">; Source layer: what's in the file</span>
+  <span class="paren">(</span><span class="symbol">cube</span>
+    <span class="paren">(</span><span class="symbol">position</span> <span class="number">0</span> <span class="number">0</span> <span class="number">0</span><span class="paren">)</span>
+    <span class="paren">(</span><span class="symbol">meta</span> <span class="keyword">:layer</span> <span class="keyword">:source</span><span class="paren">))</span>
+  
+  <span class="comment">; Runtime layer: user moved it during session</span>
+  <span class="comment">; This persists across reloads but isn't in source</span>
+  <span class="paren">(</span><span class="symbol">runtime-override</span> <span class="keyword">:cube</span>
+    <span class="paren">(</span><span class="symbol">position</span> <span class="number">5</span> <span class="number">2</span> <span class="number">3</span><span class="paren">)</span>
+    <span class="paren">(</span><span class="symbol">meta</span> <span class="keyword">:preserve-runtime</span><span class="paren">))</span>
+  
+  <span class="comment">; Active layer: currently executing</span>
+  <span class="comment">; Influenced by both source and runtime</span>
+  <span class="paren">(</span><span class="symbol">realize!</span><span class="paren">))</span></code></pre>
+            </div>
+
+            <p>This solves the ancient problem of Smalltalk's image drift. You can experiment freely in the runtime layer without corrupting your source. You can preserve valuable debugging state across sessions. You can have your cake and eat it too.</p>
+
+            <h2>Pattern Languages and Emergence</h2>
+
+            <p>Christopher Alexander's "Pattern Language" described how buildings and cities emerge from combinations of repeating patterns. XR-Lang applies this to programming. Patterns aren't just design templates—they're living entities that recognize where they should be applied:</p>
+
+            <div class="code-block">
+                <pre class="p-6"><code class="code-lisp text-sm font-mono"><span class="paren">(</span><span class="keyword">defpattern</span> <span class="symbol">observer</span>
+  <span class="keyword">:recognizes</span> <span class="paren">(</span><span class="symbol">fn</span> <span class="paren">[</span><span class="symbol">context</span><span class="paren">]</span>
+    <span class="paren">(</span><span class="symbol">and</span> <span class="paren">(</span><span class="symbol">has-state-changes?</span> <span class="symbol">context</span><span class="paren">)</span>
+         <span class="paren">(</span><span class="symbol">has-multiple-dependents?</span> <span class="symbol">context</span><span class="paren">)))</span>
+  
+  <span class="keyword">:suggests</span> <span class="paren">(</span><span class="symbol">fn</span> <span class="paren">[</span><span class="symbol">context</span><span class="paren">]</span>
+    <span class="paren">(</span><span class="symbol">generate-observer-structure</span> <span class="symbol">context</span><span class="paren">))</span>
+  
+  <span class="keyword">:applies</span> <span class="paren">(</span><span class="symbol">fn</span> <span class="paren">[</span><span class="symbol">context</span> <span class="symbol">approval</span><span class="paren">]</span>
+    <span class="paren">(</span><span class="keyword">when</span> <span class="symbol">approval</span>
+      <span class="paren">(</span><span class="symbol">rewrite-to-observer-pattern!</span> <span class="symbol">context</span><span class="paren">))))</span></code></pre>
+            </div>
+
+            <p>As you work, patterns watch. When they recognize their context, they offer themselves. Not as rigid templates but as adaptive suggestions that understand your specific situation. The system learns which patterns you prefer, which work in your domain, which solve your problems.</p>
+
+            <p>Over time, a codebase becomes a living ecosystem of patterns, each contributing to the whole, each learning from use. It's not intelligent design or random evolution—it's guided emergence.</p>
+
+            <h2>The Time Machine as a First-Class Feature</h2>
+
+            <p>Every programmer has had this experience: the code was working five minutes ago, and now it's broken, and you don't know what changed. In XR-Lang, you just rewind:</p>
+
+            <div class="code-block">
+                <pre class="p-6"><code class="code-lisp text-sm font-mono"><span class="paren">(</span><span class="keyword">deftimeline</span> <span class="symbol">my-session</span>
+  <span class="comment">; Every change is recorded</span>
+  <span class="paren">(</span><span class="symbol">record-changes!</span> <span class="keyword">:granularity</span> <span class="keyword">:fine</span><span class="paren">)</span>
+  
+  <span class="comment">; Travel to 5 minutes ago</span>
+  <span class="paren">(</span><span class="symbol">travel-to!</span> <span class="paren">(</span><span class="symbol">-</span> <span class="paren">(</span><span class="symbol">now</span><span class="paren">)</span> <span class="paren">(</span><span class="symbol">minutes</span> <span class="number">5</span><span class="paren">)))</span>
+  
+  <span class="comment">; Show diff between then and now</span>
+  <span class="paren">(</span><span class="symbol">visualize-changes</span> <span class="keyword">:style</span> <span class="keyword">:side-by-side</span><span class="paren">)</span>
+  
+  <span class="comment">; Branch from this point</span>
+  <span class="paren">(</span><span class="symbol">branch!</span> <span class="keyword">:name</span> <span class="string">"trying-different-approach"</span><span class="paren">))</span></code></pre>
+            </div>
+
+            <p>But it goes deeper. You can scrub through time like video, watching variables change, seeing data flow, understanding not just what broke but why. You can branch from any point, creating alternate timelines to explore different approaches.</p>
+
+            <p>This isn't just for debugging. It's for understanding. When you can see how a system evolved, you understand why it is the way it is. When you can experiment without consequences, you're more likely to find breakthrough solutions.</p>
+
+            <h2>The Death of Compile Time</h2>
+
+            <p>In XR-Lang, there's no such thing as compile time. Everything is always live, always running, always editable. This sounds impossible until you realize it's how reality works. The universe doesn't compile. It just is.</p>
+
+            <p>The technical trick is that XR-Lang maintains multiple representations simultaneously:</p>
+
+            <ul>
+                <li>The source DSL (what you write)</li>
+                <li>The abstract syntax tree (what it means)</li>
+                <li>The bytecode (what executes)</li>
+                <li>The visual representation (what you see)</li>
+            </ul>
+
+            <p>Changes at any level propagate to the others instantly. Edit the source, and the 3D scene updates. Manipulate objects in 3D, and the source reflects the change. It's not compilation; it's synchronization.</p>
+
+            <p>This eliminates entire categories of errors. Type mismatches are visible as incompatible connections. Null pointer exceptions can't happen when you can see the absence. Race conditions appear as literal collisions in space-time.</p>
+
+            <h2>Why Homoiconicity Matters More Than Ever</h2>
+
+            <p>Homoiconicity—code as data, data as code—sounds like an implementation detail. It's not. It's the key to everything.</p>
+
+            <p>When code is data, you can:</p>
+            <ul>
+                <li>Analyze it programmatically</li>
+                <li>Transform it systematically</li>
+                <li>Generate it dynamically</li>
+                <li>Visualize it spatially</li>
+                <li>Version it granularly</li>
+                <li>Evolve it genetically</li>
+            </ul>
+
+            <p>When data is code, you can:</p>
+            <ul>
+                <li>Execute your data structures</li>
+                <li>Debug by running history</li>
+                <li>Optimize by rewriting reality</li>
+                <li>Compute with configuration</li>
+            </ul>
+
+            <p>In XR-Lang, this isn't abstract. You can literally see the AST of your program floating in space. You can grab a node and move it. You can connect data to code by drawing a line. The homoiconic property makes the invisible visible and the impossible possible.</p>
+
+            <h2>The Conversation With Reality</h2>
+
+            <p>Traditional programming is a monologue. You write code, compile it, run it, and hope for the best. Debugging is archaeology—digging through logs to understand what happened in the past.</p>
+
+            <p>XR-Lang is a conversation. You propose changes and see them immediately. The system responds, sometimes surprising you. You adjust, it adapts. It's not writing a program; it's having a discussion with reality about what should exist.</p>
+
+            <p>This conversational nature extends to collaboration. When multiple programmers work in the same space, they're not just sharing code—they're sharing thoughts made visible. Ideas spread through the space like waves. Solutions emerge from the intersection of perspectives.</p>
+
+            <h2>The End of Programming as We Know It</h2>
+
+            <p>I realize this sounds hyperbolic, but consider: if programs can see themselves, modify themselves, and converse about themselves, are they still programs in the traditional sense? If coding happens through spatial manipulation and natural language, is it still coding? If there's no distinction between development and runtime, is there still development?</p>
+
+            <p>XR-Lang doesn't just change how we program—it changes what programming is. It's not a better text editor or a smarter compiler. It's a new medium where thought becomes reality without the traditional intermediaries of syntax and compilation.</p>
+
+            <p>We're not building a programming language. We're building a thinking environment. A place where ideas can live, grow, and evolve. A meta-medium that can become any medium, including ones we haven't imagined yet.</p>
+
+            <h2>What This Means for You</h2>
+
+            <p>If you're reading this, you're probably a programmer. You've spent years learning to think in text, to model space in your head, to debug with print statements. Those skills won't become useless, but they'll become unnecessary.</p>
+
+            <p>XR-Lang asks you to unlearn the limitations we've accepted as fundamental. Files aren't fundamental. Compilation isn't fundamental. The separation between code and data isn't fundamental. These are all historical accidents we've elevated to principles.</p>
+
+            <p>The real principles are simpler:</p>
+            <ul>
+                <li>Programs are thoughts made executable</li>
+                <li>Debugging is understanding made visible</li>
+                <li>Programming is conversation with possibility</li>
+            </ul>
+
+            <p>Everything else is implementation detail.</p>
+
+            <h2>The Bootstrap Paradox, Resolved</h2>
+
+            <p>There's a paradox in creating a self-modifying system: how do you build something that can rebuild itself? It's like lifting yourself by your bootstraps—impossible in physics, essential in programming.</p>
+
+            <p>XR-Lang resolves this through layers. The Rust VM provides the bedrock—minimal, fast, unchanging. On top of that, XR-Lang implements itself, becoming increasingly self-aware and self-modifying as it grows. The AI layer adds intention and understanding. The human layer adds purpose and direction.</p>
+
+            <p>It's not bootstrapping—it's evolution. Each layer enables the next. Each generation is more capable than the last. The system doesn't just run; it grows.</p>
+
+            <h2>The Call to Adventure</h2>
+
+            <p>This isn't a finished system. It's a beginning. A seed. A bootstrap. It needs people who understand that programming's next breakthrough won't come from faster chips or smarter algorithms, but from fundamentally reimagining the medium itself.</p>
+
+            <p>If you've ever felt constrained by text files, frustrated by compile cycles, or limited by the gap between imagination and implementation, XR-Lang is for you. If you've ever wanted to reach into a program and fix it with your hands, to rewind a bug and watch it happen, to have a conversation with your code, this is your chance.</p>
+
+            <p>We're not just building a new programming language. We're building a new relationship with computation. One where the boundary between human and machine intelligence blurs. Where creativity and logic merge. Where programming becomes as natural as thought and as powerful as imagination.</p>
+
+            <p>The meta-medium isn't coming. It's here. It's growing. It's waiting for you to help it become what it's meant to be.</p>
+
+            <p>What will you create when the medium itself is alive?</p>
+
+            <hr class="my-12 border-gray-300">
+
+            <p class="text-gray-600 italic text-base mt-12 pt-8 border-t border-gray-200">XR-Lang is being developed in the open at <a href="https://github.com/questspace/xr-lang" class="text-blue-600 hover:text-blue-700 underline">GitHub</a>. We need contributors who understand that the future of programming isn't more of the same, but something fundamentally different. Something alive. Something that programs itself.</p>
+        </article>
+    </main>
+
+    <footer class="border-t border-gray-200 py-12 mt-16">
+        <div class="max-w-3xl mx-auto px-6">
+            <p class="text-gray-600"><a href="../index.html" class="text-blue-600 hover:text-blue-700">← Back to Essays</a></p>
+        </div>
+    </footer>
+</body>
+</html>
