@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
+use std::cell::RefCell;
 use serde::{Deserialize, Serialize};
 
 /// Symbol type for identifiers
@@ -64,33 +65,31 @@ pub struct Channel {
 /// Environment for variable bindings
 #[derive(Debug, Clone)]
 pub struct Environment {
-    bindings: Rc<HashMap<Symbol, Value>>,
+    bindings: Rc<RefCell<HashMap<Symbol, Value>>>,
     parent: Option<Rc<Environment>>,
 }
 
 impl Environment {
     pub fn new() -> Self {
         Environment {
-            bindings: Rc::new(HashMap::new()),
+            bindings: Rc::new(RefCell::new(HashMap::new())),
             parent: None,
         }
     }
     
     pub fn with_parent(parent: Rc<Environment>) -> Self {
         Environment {
-            bindings: Rc::new(HashMap::new()),
+            bindings: Rc::new(RefCell::new(HashMap::new())),
             parent: Some(parent),
         }
     }
     
     pub fn bind(&mut self, symbol: Symbol, value: Value) {
-        Rc::get_mut(&mut self.bindings)
-            .expect("Cannot modify shared environment")
-            .insert(symbol, value);
+        self.bindings.borrow_mut().insert(symbol, value);
     }
     
     pub fn lookup(&self, symbol: &Symbol) -> Option<Value> {
-        self.bindings.get(symbol).cloned().or_else(|| {
+        self.bindings.borrow().get(symbol).cloned().or_else(|| {
             self.parent.as_ref().and_then(|p| p.lookup(symbol))
         })
     }

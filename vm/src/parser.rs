@@ -212,10 +212,28 @@ impl Lexer {
                     self.advance();
                     return Ok(Some(Token::RBrace));
                 }
-                Some('#') if self.peek() == Some('{') => {
-                    self.advance();
-                    self.advance();
-                    return Ok(Some(Token::HashBrace));
+                Some('#') => {
+                    // Check for #t, #f (boolean literals) or #{ (set)
+                    match self.peek() {
+                        Some('{') => {
+                            self.advance();
+                            self.advance();
+                            return Ok(Some(Token::HashBrace));
+                        }
+                        Some('t') => {
+                            self.advance(); // skip #
+                            self.advance(); // skip t
+                            return Ok(Some(Token::True));
+                        }
+                        Some('f') => {
+                            self.advance(); // skip #
+                            self.advance(); // skip f
+                            return Ok(Some(Token::False));
+                        }
+                        _ => {
+                            return Err(format!("Unexpected character after #: {:?}", self.peek()));
+                        }
+                    }
                 }
                 Some('\'') => {
                     self.advance();

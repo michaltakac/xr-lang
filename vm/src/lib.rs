@@ -37,6 +37,12 @@ pub mod persistence;  // Journal & snapshot store
 pub mod parser;       // EDN-like S-expression parser
 pub mod intrinsics;   // Scene primitives as native functions
 
+// Stage B: Homoiconic Core
+pub mod macro_system; // Hygienic macros with gensym support
+pub mod evaluator;    // Metacircular evaluator
+pub mod compiler;     // Bytecode compiler from S-expressions
+pub mod selective_persistence; // Fine-grained persistence policies
+
 // Cross-platform support modules
 pub mod image;        // Portable image structure for deployment
 pub mod capability;   // Platform capability abstraction
@@ -57,6 +63,12 @@ pub use value::{Value, Symbol, Environment};
 pub use bytecode::{OpCode, ByteCode, VM};
 pub use persistence::{Journal, State, PersistenceLayer};
 pub use interpreter::*;
+
+// Re-export Stage B types
+pub use macro_system::{MacroExpander, Macro};
+pub use evaluator::Evaluator;
+pub use compiler::Compiler;
+pub use selective_persistence::{SelectivePersistence, PersistencePolicy, PersistenceScope, PolicyBuilder};
 
 // Re-export cross-platform types
 pub use image::{XRLangImage, ImageBuilder, Platform, ImageMetadata};

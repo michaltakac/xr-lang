@@ -1,6 +1,34 @@
 # XR-Lang Changelog
 
-## [Unreleased] - 2025-09-06
+## [0.3.0] - 2025-09-06
+
+### Added - Stage B: Homoiconic Core Implementation
+- **Macro System** - Hygienic macros with gensym support
+  - `vm/src/macro_system.rs` - Complete macro expander following Lisp tradition
+  - Gensym for unique symbol generation preventing variable capture
+  - Quasiquote support for template-based macros
+  - Core macros: defmacro, let, when, unless
+  - Scene-specific macros for XR development
+  
+- **Metacircular Evaluator** - Self-hosting evaluation engine
+  - `vm/src/evaluator.rs` - Complete eval function written in XR-Lang style
+  - All special forms: quote, if, lambda, define, let, begin, set!, eval, apply
+  - Primitive functions: arithmetic, comparison, list operations, type predicates
+  - Proper closure support with lexical scoping
+  - Macro expansion integrated into evaluation
+  
+- **Bytecode Compiler** - S-expression to bytecode compilation
+  - `vm/src/compiler.rs` - Compiles XR-Lang to stack-based bytecode
+  - Handles all special forms with proper control flow
+  - Function compilation with parameter binding
+  - Integration with macro expansion phase
+  
+- **Selective Persistence Policies** - Fine-grained state management
+  - `vm/src/selective_persistence.rs` - Metacircular control over persistence
+  - Persistence scopes: Never, HotReload, TimeTravel, Session, Permanent
+  - Policy-based filtering of journal entries and state
+  - Version migration support for evolving data structures
+  - Integration with event-sourced persistence layer
 
 ### Added - Cross-Platform Architecture
 - **Portable Image System** - Smalltalk-inspired bytecode images for universal deployment
@@ -52,7 +80,10 @@
 - Hot-swapping reliability issues caused by complex reconciliation
 - State preservation during hot-reload now predictable and debuggable
 - All compilation errors in VM package resolved
-- 73 total tests passing (49 VM core + 16 hot-reload + 9 Stage A + 7 cross-platform)
+- Environment mutation issues fixed with RefCell for interior mutability
+- Parser now correctly handles #t and #f boolean literals
+- Quote (') syntax properly evaluated in expressions
+- 106 total tests passing (74 VM core + 16 hot-reload + 9 Stage A + 7 cross-platform)
 
 ## Previous Releases
 
@@ -68,7 +99,9 @@
 - Comprehensive test coverage (22+ reconciliation tests)
 
 ### Notes
+- Stage B (Homoiconic Core) fully implemented with macro system, evaluator, and compiler
 - The new simplified hot-reload system addresses the core issue: "reconciliation added a lot of complexity before and broke code hot-swapping"
 - Implementation follows recommendations from language design experts to use event-sourcing over complex diffing
 - Cross-platform architecture inspired by Smalltalk's portable image model enables "One Image, Many Worlds" deployment
 - All features fully implemented without TODOs, stubs, or mocks as requested
+- Ready for Stage C: Self-modification APIs and bootstrapping the compiler in XR-Lang itself

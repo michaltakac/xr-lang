@@ -87,7 +87,7 @@ pub struct BranchId(pub String);
 
 /// The journal maintains the event log
 pub struct Journal {
-    entries: Vec<JournalEntry>,
+    pub entries: Vec<JournalEntry>,
     current_branch: BranchId,
     branches: HashMap<BranchId, Vec<JournalEntry>>,
 }
@@ -194,6 +194,7 @@ impl Journal {
 }
 
 /// The current state of the system
+#[derive(Clone)]
 pub struct State {
     values: HashMap<ValuePath, Value>,
     metadata: HashMap<ValuePath, HashMap<String, Value>>,
@@ -267,6 +268,11 @@ impl State {
     pub fn restore_from_snapshot(&mut self, snapshot: &Snapshot) {
         self.values = snapshot.state.clone();
         self.metadata.clear();
+    }
+    
+    /// Iterate over all values in the state
+    pub fn iter(&self) -> impl Iterator<Item = (&ValuePath, &Value)> {
+        self.values.iter()
     }
 }
 

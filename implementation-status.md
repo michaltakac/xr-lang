@@ -1,8 +1,41 @@
 # XR-Lang Implementation Status
 
+> **Latest Achievement**: Stage B (Homoiconic Core) complete! ✅
+> - Hygienic macro system with gensym support
+> - Metacircular evaluator for self-hosting
+> - Bytecode compiler from S-expressions
+> - Selective persistence policies
+> - All 106 tests passing
+
 ## ✅ Completed Features
 
-### 12. Cross-Platform Architecture ✅ NEW
+### 13. Stage B - Homoiconic Core ✅ NEW
+- **Macro System**: Complete hygienic macro implementation
+  - Gensym support for unique symbol generation
+  - Quasiquote and unquote for template-based macros
+  - Core macros (defmacro, let, when, unless) implemented
+  - Scene-specific macro foundations
+  - Full test coverage with macro expansion tests
+- **Metacircular Evaluator**: Self-hosting evaluation engine
+  - Complete eval function with all special forms
+  - Primitive functions for arithmetic, comparison, lists
+  - Proper closure support with lexical scoping
+  - Integration with macro expansion
+  - Recursive function support with tail-call optimization ready
+- **Bytecode Compiler**: S-expression to bytecode compilation
+  - Compiles all special forms to stack-based bytecode
+  - Function compilation with proper parameter binding
+  - Control flow compilation (if, cond, loops)
+  - Integration with macro expansion phase
+- **Selective Persistence**: Fine-grained state management
+  - Hierarchical persistence scopes (Never → Permanent)
+  - Policy-based filtering of state and journal entries
+  - Version migration support for data evolution
+  - Pattern matching for path-based policies
+  - Integration with event-sourced persistence
+- **Test Coverage**: 74 unit tests + 9 Stage A + 16 hot-reload + 7 cross-platform tests
+
+### 12. Cross-Platform Architecture ✅
 - **Portable Image System**: Smalltalk-inspired single bytecode image deployment
   - XRLangImage structure for platform-independent distribution
   - Binary serialization/deserialization for .img files
@@ -157,14 +190,15 @@
 ## 🚧 In Progress / Future Work
 
 ### Near-term Goals
-1. **Stage B - Homoiconic Core**: Implement macro system and metacircular evaluator
+1. **Stage C - Self-Modification**: Implement runtime code modification APIs
 2. **AI Integration**: Connect to Claude/GPT for code generation and assistance
 3. **3D Model Loading**: Complete glTF/USD support with hot-reload
 4. **Test DSL Integration**: Extend main DSL parser to recognize test primitives
 5. **Recording System**: Implement actual test recording from user interactions
+6. **Bootstrap Compiler**: Rewrite the compiler in XR-Lang itself (self-hosting)
 
 ### Medium-term Goals (from project-vision.md)
-1. **Macro System**: ✅ PARTIAL - Basic macro system implemented, quasiquote support pending
+1. **Macro System**: ✅ COMPLETE - Hygienic macros with quasiquote support fully implemented
 2. **Self-Modification API**: ✅ PARTIAL - CodeSync provides foundation, full API pending
 3. **Voice Input**: Whisper API integration for voice commands
 4. **Multimodal Pipeline**: Voice → Intent → DSL generation
@@ -223,6 +257,10 @@ xr-lang/
 │       └── visualization.rs    # 3D test visualization (Entity-based, not CubeData)
 ├── vm/
 │   └── src/
+│       ├── macro_system.rs     # Stage B: Hygienic macro expander
+│       ├── evaluator.rs        # Stage B: Metacircular evaluator
+│       ├── compiler.rs         # Stage B: Bytecode compiler
+│       ├── selective_persistence.rs # Stage B: Fine-grained persistence
 │       └── interpreter.rs      # Extended with math functions
 └── examples/
     ├── preserve_test.xrdsl     # Demo of preservation features
@@ -252,13 +290,15 @@ cargo run -p desktop -- examples/preserve_test.xrdsl
 # Build the testing framework
 cargo build -p xr-lang-testing
 
-# Run all tests including reconciliation and hot-swap tests
+# Run all tests including Stage B components
 cargo test
 
 # Run specific test suites
 cargo test -p gpu reconciliation_tests
 cargo test -p gpu hot_swap_integration
-cargo test -p vm cross_platform
+cargo test -p vm                    # Runs all 74 VM tests including Stage B
+cargo test -p vm cross_platform    # Cross-platform tests
+cargo test -p vm --test stage_a_integration  # Stage A integration tests
 
 # Future: Run tests (when CLI binary is added)
 # xr-lang test examples/test_camera_preservation.xrdsl
@@ -276,21 +316,26 @@ cargo test -p vm cross_platform
 8. **Performance Tools**: Comprehensive performance monitoring and debugging capabilities
 9. **Math Functions**: Complete set of mathematical functions for behaviors
 10. **Material System**: Three.js-inspired material system with advanced rendering options
-11. **Robust Testing**: 73 total tests (49 VM core + 16 hot-reload + 9 Stage A + 7 cross-platform)
+11. **Robust Testing**: 106 total tests (74 VM core + 16 hot-reload + 9 Stage A + 7 cross-platform)
 12. **Simplified Hot-Swapping**: Event-sourced approach replaced complex reconciliation
 13. **Homoiconic Foundation**: Code-as-data principle fully implemented from Stage A
 14. **Time-Travel Ready**: Journal-based persistence enables debugging across time
 15. **Cross-Platform Ready**: Smalltalk-inspired portable images run unchanged across XR platforms
+16. **Stage B Complete**: Macro system, metacircular evaluator, and compiler fully implemented
 
 ## 📝 Notes
 
 - The VM foundation (Stage A) is complete with homoiconic values and persistence
+- Stage B (Homoiconic Core) is now complete with macro system, evaluator, and compiler
 - The simplified hot-reload system replaces complex reconciliation with event-sourcing
-- All 73 tests passing across VM core, hot-reload, Stage A, and cross-platform components
+- All 106 tests passing across VM core, hot-reload, Stage A, Stage B, and cross-platform components
 - Successfully migrated from deprecated CubeData API to the modern Entity system
 - The testing framework has all core components but needs integration with the main DSL parser
 - Meta directives provide a clean way to control preservation behavior per-object
-- The macro system enables procedural generation with loops and math functions
+- The macro system now supports hygienic macros with gensym and quasiquote
+- Metacircular evaluator can evaluate XR-Lang code within XR-Lang itself
+- Bytecode compiler translates S-expressions to stack-based VM instructions
+- Selective persistence provides fine-grained control over state management
 - Performance monitoring tools provide real-time insights into application performance
 - Cross-platform architecture enables single bytecode image deployment across all XR platforms
 - Capability-based abstraction provides platform-agnostic service invocation
@@ -298,4 +343,4 @@ cargo test -p vm cross_platform
 - All compilation errors and warnings have been resolved
 - The new hot-reload approach directly addresses the issue: "reconciliation added a lot of complexity before and broke code hot-swapping"
 - Implementation follows expert recommendations for event-sourced state management
-- Ready for Stage B: Implementing macro system and metacircular evaluator in XR-Lang itself
+- Ready for Stage C: Self-modification APIs and bootstrapping the compiler in XR-Lang
