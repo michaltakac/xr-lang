@@ -11,13 +11,8 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow.workspace = true
 thiserror.workspace = true
-ndk.workspace = true
-openxr.workspace = true
-wgpu = { workspace = true }
-winit = { workspace = true, features = ["android-native-activity"] }
 bytemuck.workspace = true
 log.workspace = true
-android_logger = "0.13"
 dsl = { path = "../../dsl" }
 ir = { path = "../../ir" }
 jit = { path = "../../jit" }
@@ -26,6 +21,14 @@ gpu = { path = "../../gpu" }
 xr = { path = "../../xr" }
 ai = { path = "../../ai" }
 cv = { path = "../../cv" }
+
+# Android-specific dependencies (only compiled on target_os = "android")
+[target.'cfg(target_os = "android")'.dependencies]
+ndk.workspace = true
+openxr.workspace = true
+wgpu = { workspace = true }
+winit = { workspace = true, features = ["android-native-activity"] }
+android_logger = "0.13"
 
 [package.metadata.android]
 package = "com.example.xrdsl"

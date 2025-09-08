@@ -262,33 +262,216 @@ pub fn init_core_macros(expander: &mut MacroExpander) {
 
 /// Scene-specific macros for XR-Lang
 pub fn init_scene_macros(expander: &mut MacroExpander) {
-    // defscene3d: Define a 3D scene
-    let defscene3d_src = r#"
-        (do
-          (create-scene name)
-          ~@(map expand-scene-element body))
-    "#;
-    
-    // with-preserved-state: Preserve state during operations
-    let preserved_state_src = r#"
-        (let ((state# (gensym "state")))
-          `(let ((,state# (capture-state)))
-            (try
-              ,@body
-              (finally
-                (restore-state ,state#)))))
-    "#;
-    
-    // animate: Create animation behaviors
-    let animate_src = r#"
-        (behavior ~object
-          (on-update (dt)
-            (update-property ~property
-              (interpolate ~from ~to (get-time)))))
-    "#;
-    
-    // Note: These would be properly implemented when we have
-    // the full evaluator running in XR-Lang itself
+    // Minimal, practical scene helpers so XR-Lang can express scene-like code.
+    // These are wrappers around native intrinsics from vm::intrinsics and
+    // vm::intrinsics_camera.
+
+    // (defscene3d name body) -> (begin ...body)
+    let defscene3d_body = parse_one(
+        "(quasiquote (begin (unquote-splicing body)))",
+    )
+    .unwrap();
+    expander.define_macro(
+        Symbol("defscene3d".to_string()),
+        vec![Symbol("name".to_string()), Symbol("body".to_string())],
+        defscene3d_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (camera pos target) -> (create-camera pos target)
+    let camera_body = parse_one("(create-camera pos target)").unwrap();
+    expander.define_macro(
+        Symbol("camera".to_string()),
+        vec![Symbol("pos".to_string()), Symbol("target".to_string())],
+        camera_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (camera-fov pos target fov) -> (create-camera pos target fov)
+    let camera_fov_body = parse_one("(create-camera pos target fov)").unwrap();
+    expander.define_macro(
+        Symbol("camera-fov".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("target".to_string()),
+            Symbol("fov".to_string()),
+        ],
+        camera_fov_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (cube pos) -> (create-cube pos)
+    let cube_body = parse_one("(create-cube pos)").unwrap();
+    expander.define_macro(
+        Symbol("cube".to_string()),
+        vec![Symbol("pos".to_string())],
+        cube_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (sphere pos) -> (create-sphere pos)
+    let sphere_body = parse_one("(create-sphere pos)").unwrap();
+    expander.define_macro(
+        Symbol("sphere".to_string()),
+        vec![Symbol("pos".to_string())],
+        sphere_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (cylinder pos radius height) -> (create-cylinder pos radius height)
+    let cylinder_body = parse_one("(create-cylinder pos radius height)").unwrap();
+    expander.define_macro(
+        Symbol("cylinder".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("radius".to_string()),
+            Symbol("height".to_string()),
+        ],
+        cylinder_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (cone pos radius height segments) -> (create-cone pos radius height segments)
+    let cone_body = parse_one("(create-cone pos radius height segments)").unwrap();
+    expander.define_macro(
+        Symbol("cone".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("radius".to_string()),
+            Symbol("height".to_string()),
+            Symbol("segments".to_string()),
+        ],
+        cone_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (pyramid pos basew based h) -> (create-pyramid pos basew based h)
+    let pyramid_body = parse_one("(create-pyramid pos basew based h)").unwrap();
+    expander.define_macro(
+        Symbol("pyramid".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("basew".to_string()),
+            Symbol("based".to_string()),
+            Symbol("h".to_string()),
+        ],
+        pyramid_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (wedge pos w h d) -> (create-wedge pos w h d)
+    let wedge_body = parse_one("(create-wedge pos w h d)").unwrap();
+    expander.define_macro(
+        Symbol("wedge".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("w".to_string()),
+            Symbol("h".to_string()),
+            Symbol("d".to_string()),
+        ],
+        wedge_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (torus pos R r seg rings) -> (create-torus pos R r seg rings)
+    let torus_body = parse_one("(create-torus pos R r seg rings)").unwrap();
+    expander.define_macro(
+        Symbol("torus".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("R".to_string()),
+            Symbol("r".to_string()),
+            Symbol("seg".to_string()),
+            Symbol("rings".to_string()),
+        ],
+        torus_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (plane pos w h sub) -> (create-plane pos w h sub)
+    let plane_body = parse_one("(create-plane pos w h sub)").unwrap();
+    expander.define_macro(
+        Symbol("plane".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("w".to_string()),
+            Symbol("h".to_string()),
+            Symbol("sub".to_string()),
+        ],
+        plane_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (capsule pos radius height seg) -> (create-capsule pos radius height seg)
+    let capsule_body = parse_one("(create-capsule pos radius height seg)").unwrap();
+    expander.define_macro(
+        Symbol("capsule".to_string()),
+        vec![
+            Symbol("pos".to_string()),
+            Symbol("radius".to_string()),
+            Symbol("height".to_string()),
+            Symbol("seg".to_string()),
+        ],
+        capsule_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (icosahedron pos radius) -> (create-icosahedron pos radius)
+    let icosa_body = parse_one("(create-icosahedron pos radius)").unwrap();
+    expander.define_macro(
+        Symbol("icosahedron".to_string()),
+        vec![Symbol("pos".to_string()), Symbol("radius".to_string())],
+        icosa_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (octahedron pos radius) -> (create-octahedron pos radius)
+    let octa_body = parse_one("(create-octahedron pos radius)").unwrap();
+    expander.define_macro(
+        Symbol("octahedron".to_string()),
+        vec![Symbol("pos".to_string()), Symbol("radius".to_string())],
+        octa_body,
+        Rc::new(Environment::new()),
+    );
+
+    // (tetrahedron pos radius) -> (create-tetrahedron pos radius)
+    let tetra_body = parse_one("(create-tetrahedron pos radius)").unwrap();
+    expander.define_macro(
+        Symbol("tetrahedron".to_string()),
+        vec![Symbol("pos".to_string()), Symbol("radius".to_string())],
+        tetra_body,
+        Rc::new(Environment::new()),
+    );
+
+    // Material helper: (color obj [r g b a]) -> (set-color obj [r g b a])
+    let color_body = parse_one("(set-color obj rgba)").unwrap();
+    expander.define_macro(
+        Symbol("color".to_string()),
+        vec![Symbol("obj".to_string()), Symbol("rgba".to_string())],
+        color_body,
+        Rc::new(Environment::new()),
+    );
+
+    // Material set: (material obj { ... }) -> (set-material obj { ... })
+    // We pass through the map as-is; the evaluator will read it as Value::Map
+    let material_body = parse_one("(set-material obj mat)").unwrap();
+    expander.define_macro(
+        Symbol("material".to_string()),
+        vec![Symbol("obj".to_string()), Symbol("mat".to_string())],
+        material_body,
+        Rc::new(Environment::new()),
+    );
+
+    // Note: rotate/scale are available as native intrinsics (no macros defined)
+
+    // (move obj pos) -> (update-transform obj pos)
+    let move_body = parse_one("(update-transform obj pos)").unwrap();
+    expander.define_macro(
+        Symbol("move".to_string()),
+        vec![Symbol("obj".to_string()), Symbol("pos".to_string())],
+        move_body,
+        Rc::new(Environment::new()),
+    );
 }
 
 #[cfg(test)]

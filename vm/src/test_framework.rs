@@ -8,16 +8,15 @@
 //! - Debug output capture
 //! - Performance profiling
 
-use crate::value::{Value, Symbol, Environment, ObjectId};
+use crate::value::{Value, Symbol, ObjectId};
 use crate::evaluator::Evaluator;
 use crate::parser::Parser;
-use crate::intrinsics::{SceneState, SCENE, Vec3, Camera, Transform, SceneNode};
+use crate::intrinsics::{SCENE, Vec3, Camera, SceneNode};
 use crate::hotreload::HotReloadManager;
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::fs;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 

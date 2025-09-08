@@ -42,6 +42,15 @@ fn main() {
     if filter.as_ref().map_or(true, |f| f.contains("introspect")) {
         suites_to_run.push(("Introspection", create_introspection_test_suite()));
     }
+    if filter.as_ref().map_or(true, |f| f.contains("primitives")) {
+        suites_to_run.push(("Primitives", create_primitives_test_suite()));
+    }
+    if filter.as_ref().map_or(true, |f| f.contains("examples") || f.contains("vm")) {
+        suites_to_run.push(("Examples", create_examples_test_suite()));
+    }
+    if filter.as_ref().map_or(true, |f| f.contains("materials")) {
+        suites_to_run.push(("Materials", create_materials_test_suite()));
+    }
     
     if suites_to_run.is_empty() {
         println!("No test suites match filter: {:?}", filter);
@@ -489,6 +498,131 @@ fn create_hot_reload_test_suite() -> TestSuite {
     suite
 }
 
+/// Create primitives test suite
+fn create_primitives_test_suite() -> TestSuite {
+    let mut suite = TestSuite::new("Primitives Tests");
+    suite.add_test(test_create_primitives_and_transforms);
+    suite.add_test(test_color_parsing_variants);
+    suite
+}
+
+fn test_create_primitives_and_transforms(harness: &mut TestHarness) -> TestResult {
+    harness.reset();
+
+    // Create a cube, move/rotate/scale, and a sphere + plane
+    let result = harness.execute(r#"
+        (define cube (cube [0 0 0]))
+        (move cube [2 0 0])
+        (rotate cube [0 45 0])
+        (scale cube [2 2 2])
+        (define sphere (sphere [3 0 0]))
+        (define plane (plane [0 -1 0] 10 10 4))
+        [cube sphere plane]
+    "#).expect("Failed to create primitives");
+
+    if let vm::value::Value::Vector(objects) = result {
+        assert_eq!(objects.len(), 3, "Should create 3 objects");
+        if let vm::value::Value::Object(cube_id) = objects[0].clone() {
+            // Validate transforms
+            harness.assert_position(cube_id, Vec3::new(2.0, 0.0, 0.0), 0.01);
+            harness.assert_scale(cube_id, Vec3::new(2.0, 2.0, 2.0), 0.01);
+        }
+        harness.capture_scene_snapshot("Primitives and transforms");
+    } else {
+        panic!("Expected a vector of object IDs");
+    }
+
+    harness.get_results("Create Primitives & Transforms")
+}
+
+fn test_color_parsing_variants(harness: &mut TestHarness) -> TestResult {
+    harness.reset();
+
+    // Create cube and set different color formats
+    let res = harness.execute(r##"
+        (define cube (cube [0 0 0]))
+        (color cube "#ff8844")
+        cube
+    "##).expect("Failed to create cube");
+    let mut first_color = None;
+    if let vm::value::Value::Object(id) = res {
+        let snap = harness.capture_scene_snapshot("After hex color");
+        if let Some(node) = snap.nodes.get(&id) {
+            // Extract color from material variants that carry a base color
+            first_color = match &node.material {
+                vm::intrinsics::Material::Basic { color, .. } => Some(*color),
+                vm::intrinsics::Material::Standard { base_color, .. } => Some(*base_color),
+                vm::intrinsics::Material::Lambert { color } => Some(*color),
+                vm::intrinsics::Material::Phong { color, .. } => Some(*color),
+                vm::intrinsics::Material::Toon { color, .. } => Some(*color),
+                vm::intrinsics::Material::Normal => None,
+            };
+        }
+        // Named color
+        harness.execute("(color cube \"magenta\")").expect("Failed to set named color");
+        // Vector 0..255 with alpha
+        harness.execute("(color cube [10 20 30 128])").expect("Failed to set vector color");
+        let final_snap = harness.capture_scene_snapshot("After vector color");
+        let final_color = final_snap.nodes.get(&id).and_then(|n| match &n.material {
+            vm::intrinsics::Material::Basic { color, .. } => Some(*color),
+            vm::intrinsics::Material::Standard { base_color, .. } => Some(*base_color),
+            vm::intrinsics::Material::Lambert { color } => Some(*color),
+            vm::intrinsics::Material::Phong { color, .. } => Some(*color),
+            vm::intrinsics::Material::Toon { color, .. } => Some(*color),
+            vm::intrinsics::Material::Normal => None,
+        });
+        assert!(first_color.is_some(), "Hex color should be applied");
+        assert!(final_color.is_some(), "Final color should be applied");
+        let c = final_color.unwrap();
+        assert!((c[0] - (10.0/255.0)).abs() < 0.01);
+        assert!((c[1] - (20.0/255.0)).abs() < 0.01);
+        assert!((c[2] - (30.0/255.0)).abs() < 0.01);
+        assert!((c[3] - (128.0/255.0)).abs() < 0.02);
+    } else {
+        panic!("Should have received an object id");
+    }
+
+    harness.get_results("Color Parsing Variants")
+}
+
+/// Create examples suite (VM macros demo)
+fn create_examples_test_suite() -> TestSuite {
+    let mut suite = TestSuite::new("Examples Tests");
+    suite.add_test(test_vm_macros_demo_file);
+    suite
+}
+
+fn test_vm_macros_demo_file(harness: &mut TestHarness) -> TestResult {
+    harness.reset();
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("examples")
+        .join("vm_macros_demo.xrl");
+    harness.execute_file(path.to_str().unwrap()).expect("Failed to execute vm_macros_demo.xrl");
+    let snap = harness.capture_scene_snapshot("VM macros demo");
+    assert!(snap.nodes.len() >= 4, "VM demo should create several objects");
+    harness.get_results("VM Macros Demo")
+}
+
+/// Create materials suite (uses the materials demo example)
+fn create_materials_test_suite() -> TestSuite {
+    let mut suite = TestSuite::new("Materials Tests");
+    suite.add_test(test_materials_demo_file);
+    suite
+}
+
+fn test_materials_demo_file(harness: &mut TestHarness) -> TestResult {
+    harness.reset();
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("examples")
+        .join("materials_demo.xrl");
+    harness.execute_file(path.to_str().unwrap()).expect("Failed to execute materials_demo.xrl");
+    let snap = harness.capture_scene_snapshot("Materials demo");
+    // Expect at least 6 nodes (5 objects + plane)
+    assert!(snap.nodes.len() >= 6, "Materials demo should create several objects");
+    harness.get_results("Materials Demo")
+}
 fn test_basic_hot_reload(harness: &mut TestHarness) -> TestResult {
     harness.reset();
     

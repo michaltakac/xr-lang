@@ -125,7 +125,12 @@ jobs:
       run: cargo install cargo-tarpaulin
     
     - name: Generate coverage
-      run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+      run: |
+        # Exclude Android-specific sources to avoid pulling NDK on CI
+        cargo tarpaulin \
+          --verbose --all-features --workspace \
+          --timeout 120 --out xml \
+          --exclude-files 'app-hosts/quest/**'
     
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v3

@@ -1,8 +1,8 @@
 {
-  "duration_ms": 1,
+  "duration_ms": 2,
   "failed_test_names": [],
   "failed_tests": 0,
-  "passed_tests": 8,
+  "passed_tests": 12,
   "tests": [
     {
       "assertions": 3,
@@ -12,9 +12,9 @@
       "name": "Camera Creation Test",
       "passed": true,
       "performance": {
-        "eval_time_us": 30,
+        "eval_time_us": 22,
         "object_count": 3,
-        "parse_time_us": 18
+        "parse_time_us": 13
       }
     },
     {
@@ -25,7 +25,7 @@
       "name": "Camera Manipulation Test",
       "passed": true,
       "performance": {
-        "eval_time_us": 3,
+        "eval_time_us": 2,
         "object_count": 1,
         "parse_time_us": 2
       }
@@ -38,9 +38,9 @@
       "name": "Camera Utilities Test",
       "passed": true,
       "performance": {
-        "eval_time_us": 78,
+        "eval_time_us": 43,
         "object_count": 1,
-        "parse_time_us": 32
+        "parse_time_us": 23
       }
     },
     {
@@ -53,7 +53,7 @@
       "performance": {
         "eval_time_us": 2,
         "object_count": 3,
-        "parse_time_us": 2
+        "parse_time_us": 1
       }
     },
     {
@@ -64,9 +64,9 @@
       "name": "Basic Hot Reload Test",
       "passed": true,
       "performance": {
-        "eval_time_us": 19,
+        "eval_time_us": 15,
         "object_count": 3,
-        "parse_time_us": 12
+        "parse_time_us": 9
       }
     },
     {
@@ -77,9 +77,9 @@
       "name": "State Preservation Test",
       "passed": true,
       "performance": {
-        "eval_time_us": 53,
+        "eval_time_us": 24,
         "object_count": 5,
-        "parse_time_us": 24
+        "parse_time_us": 17
       }
     },
     {
@@ -90,9 +90,9 @@
       "name": "Scene Graph Introspection Test",
       "passed": true,
       "performance": {
-        "eval_time_us": 44,
+        "eval_time_us": 34,
         "object_count": 5,
-        "parse_time_us": 28
+        "parse_time_us": 20
       }
     },
     {
@@ -107,7 +107,59 @@
         "object_count": 0,
         "parse_time_us": 0
       }
+    },
+    {
+      "assertions": 2,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "2/2 assertions passed",
+      "name": "Create Primitives & Transforms",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 45,
+        "object_count": 3,
+        "parse_time_us": 16
+      }
+    },
+    {
+      "assertions": 0,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "0/0 assertions passed",
+      "name": "Color Parsing Variants",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 7,
+        "object_count": 1,
+        "parse_time_us": 2
+      }
+    },
+    {
+      "assertions": 0,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "0/0 assertions passed",
+      "name": "VM Macros Demo",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 101,
+        "object_count": 9,
+        "parse_time_us": 32
+      }
+    },
+    {
+      "assertions": 0,
+      "duration_ms": 0,
+      "failed_assertions": [],
+      "message": "0/0 assertions passed",
+      "name": "Materials Demo",
+      "passed": true,
+      "performance": {
+        "eval_time_us": 139,
+        "object_count": 7,
+        "parse_time_us": 62
+      }
     }
   ],
-  "total_tests": 8
+  "total_tests": 12
 }

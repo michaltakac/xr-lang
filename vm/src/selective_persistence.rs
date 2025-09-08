@@ -5,7 +5,7 @@
 //! by providing metacircular control over the persistence layer.
 
 use crate::value::{Value, Symbol, Keyword};
-use crate::persistence::{State, ValuePath, Change, JournalEntry, Journal};
+use crate::persistence::{State, Change, JournalEntry, Journal};
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
@@ -340,6 +340,7 @@ impl PolicyBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::persistence::ValuePath;
 
     #[test]
     fn test_persistence_scope_hierarchy() {

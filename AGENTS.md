@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - Rust workspace in `Cargo.toml` with crates: `dsl/`, `ir/`, `jit/`, `vm/`, `gpu/`, `xr/`, `ai/`, `cv/`, `testing/`, and app hosts in `app-hosts/{desktop,quest,web}`.
-- Examples in `examples/*.xrdsl`; docs in `docs/`; CI and helper scripts in root (`Makefile`, `build.sh`, `test_runner.sh`).
+- Examples in `examples/*.xrl`; docs in `docs/`; CI and helper scripts in root (`Makefile`, `build.sh`, `test_runner.sh`).
 - Integration tests live in each crate’s `tests/` directory; top-level `tests/` contains cross‑crate tests.
 
 ## Build, Test, and Development Commands

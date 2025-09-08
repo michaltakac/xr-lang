@@ -108,7 +108,59 @@ pub struct SceneNode {
     pub name: String,
     pub transform: Transform,
     pub mesh_type: Option<String>,
+    pub material: Material,
     pub children: Vec<ObjectId>,
+}
+
+/// Simple material system (headless representation)
+#[derive(Debug, Clone)]
+pub enum Material {
+    /// Unlit solid color
+    Basic {
+        color: [f32; 4],
+        animated: bool, // emulate default looping color transition
+    },
+    /// PBR-like material (similar to Bevy/Three.js standard)
+    Standard {
+        base_color: [f32; 4],
+        metallic: f32,
+        roughness: f32,
+        emissive: [f32; 3],
+    },
+    /// Lambert (diffuse-only approximation)
+    Lambert {
+        color: [f32; 4],
+    },
+    /// Phong (specular highlights)
+    Phong {
+        color: [f32; 4],
+        shininess: f32,
+        specular: [f32; 3],
+    },
+    /// Toon (cel-shading parameters)
+    Toon {
+        color: [f32; 4],
+        levels: u32,
+    },
+    /// Normal visualization
+    Normal,
+}
+
+impl Material {
+    pub fn default_animated_basic() -> Self {
+        Material::Basic { color: [0.6, 0.8, 1.0, 1.0], animated: true }
+    }
+
+    pub fn set_color(&mut self, rgba: [f32; 4]) {
+        match self {
+            Material::Basic { color, .. } => *color = rgba,
+            Material::Standard { base_color, .. } => *base_color = rgba,
+            Material::Lambert { color } => *color = rgba,
+            Material::Phong { color, .. } => *color = rgba,
+            Material::Toon { color, .. } => *color = rgba,
+            Material::Normal => {}
+        }
+    }
 }
 
 /// Global scene state (would be managed by the runtime)
@@ -207,6 +259,7 @@ pub fn intrinsic_create_cube() -> NativeFn {
                 name: format!("cube_{}", id.0),
                 transform,
                 mesh_type: Some("cube".to_string()),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -257,6 +310,7 @@ pub fn intrinsic_create_sphere() -> NativeFn {
                 name: format!("sphere_{}", id.0),
                 transform,
                 mesh_type: Some(format!("sphere:{}:{}", radius, segments)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -317,6 +371,7 @@ pub fn intrinsic_create_cylinder() -> NativeFn {
                 name: format!("cylinder_{}", id.0),
                 transform,
                 mesh_type: Some(format!("cylinder:{}:{}:{}", radius, height, segments)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -377,6 +432,7 @@ pub fn intrinsic_create_cone() -> NativeFn {
                 name: format!("cone_{}", id.0),
                 transform,
                 mesh_type: Some(format!("cone:{}:{}:{}", radius, height, segments)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -438,6 +494,7 @@ pub fn intrinsic_create_pyramid() -> NativeFn {
                 name: format!("pyramid_{}", id.0),
                 transform,
                 mesh_type: Some(format!("pyramid:{}:{}:{}", base_width, base_depth, height)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -499,6 +556,7 @@ pub fn intrinsic_create_wedge() -> NativeFn {
                 name: format!("wedge_{}", id.0),
                 transform,
                 mesh_type: Some(format!("wedge:{}:{}:{}", width, height, depth)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -568,6 +626,7 @@ pub fn intrinsic_create_torus() -> NativeFn {
                 name: format!("torus_{}", id.0),
                 transform,
                 mesh_type: Some(format!("torus:{}:{}:{}:{}", major_radius, minor_radius, segments, rings)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -628,6 +687,7 @@ pub fn intrinsic_create_plane() -> NativeFn {
                 name: format!("plane_{}", id.0),
                 transform,
                 mesh_type: Some(format!("plane:{}:{}:{}", width, height, subdivisions)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -688,6 +748,7 @@ pub fn intrinsic_create_capsule() -> NativeFn {
                 name: format!("capsule_{}", id.0),
                 transform,
                 mesh_type: Some(format!("capsule:{}:{}:{}", radius, height, segments)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -729,6 +790,7 @@ pub fn intrinsic_create_icosahedron() -> NativeFn {
                 name: format!("icosahedron_{}", id.0),
                 transform,
                 mesh_type: Some(format!("icosahedron:{}", radius)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -770,6 +832,7 @@ pub fn intrinsic_create_octahedron() -> NativeFn {
                 name: format!("octahedron_{}", id.0),
                 transform,
                 mesh_type: Some(format!("octahedron:{}", radius)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -811,6 +874,7 @@ pub fn intrinsic_create_tetrahedron() -> NativeFn {
                 name: format!("tetrahedron_{}", id.0),
                 transform,
                 mesh_type: Some(format!("tetrahedron:{}", radius)),
+                material: Material::default_animated_basic(),
                 children: Vec::new(),
             };
             
@@ -959,6 +1023,145 @@ pub fn intrinsic_raycast() -> NativeFn {
     })
 }
 
+/// Set color on an object (stores as RGBA on the scene node)
+/// (set-color object-id [r g b a]) where components are 0..1
+pub fn intrinsic_set_color() -> NativeFn {
+    Rc::new(|args| {
+        if args.len() != 2 {
+            return Err("set-color expects 2 arguments (object-id, [r g b a])".to_string());
+        }
+
+        let id = match &args[0] {
+            Value::Object(id) => *id,
+            _ => return Err("First argument must be an object ID".to_string()),
+        };
+
+        let rgba = parse_color_value(&args[1])?;
+
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                node.material.set_color(rgba);
+                Ok(Value::Nil)
+            } else {
+                Err(format!("Object {:?} not found", id))
+            }
+        })
+    })
+}
+
+fn parse_color_value(val: &Value) -> Result<[f32; 4], String> {
+    match val {
+        // Vector [r g b] or [r g b a] with components in 0..1 or 0..255
+        Value::Vector(v) => {
+            if v.len() == 3 {
+                let r = normalize_component(&v[0])?;
+                let g = normalize_component(&v[1])?;
+                let b = normalize_component(&v[2])?;
+                Ok([r, g, b, 1.0])
+            } else if v.len() == 4 {
+                let r = normalize_component(&v[0])?;
+                let g = normalize_component(&v[1])?;
+                let b = normalize_component(&v[2])?;
+                let a = normalize_component(&v[3])?; // allow 0..255 or 0..1
+                Ok([r, g, b, a])
+            } else {
+                Err("Color vector must have 3 or 4 components".to_string())
+            }
+        }
+        // Hex string or named color
+        Value::Str(s) => parse_color_string(s),
+        // Map { :r .. :g .. :b .. [:a ..] } or {"r":..}
+        Value::Map(m) => {
+            let r = m.get("r").ok_or("Missing r in color map")?;
+            let g = m.get("g").ok_or("Missing g in color map")?;
+            let b = m.get("b").ok_or("Missing b in color map")?;
+            let a = m.get("a");
+            let rr = normalize_component(r)?;
+            let gg = normalize_component(g)?;
+            let bb = normalize_component(b)?;
+            let aa = a.map(normalize_component).transpose()?.unwrap_or(1.0);
+            Ok([rr, gg, bb, aa])
+        }
+        _ => Err("Unsupported color value; use [r g b a], \"#RRGGBB\", or {r g b a}".to_string()),
+    }
+}
+
+fn normalize_component(v: &Value) -> Result<f32, String> {
+    match v {
+        Value::Float(f) => {
+            if *f > 1.0 { Ok((*f as f32) / 255.0) } else { Ok(*f as f32) }
+        }
+        Value::Int(n) => {
+            if *n > 1 { Ok((*n as f32) / 255.0) } else { Ok(*n as f32) }
+        }
+        _ => Err("Color component must be a number".to_string()),
+    }
+}
+
+fn parse_color_string(s: &str) -> Result<[f32; 4], String> {
+    let lower = s.to_ascii_lowercase();
+    if let Some(rgba) = named_color(&lower) {
+        return Ok(rgba);
+    }
+    let hex = lower.trim_start_matches('#');
+    let parse_hex2 = |h: &str| u8::from_str_radix(h, 16).map_err(|_| "Invalid hex".to_string());
+    let (r, g, b, a) = match hex.len() {
+        3 => {
+            let r = parse_hex2(&hex[0..1].repeat(2))?;
+            let g = parse_hex2(&hex[1..2].repeat(2))?;
+            let b = parse_hex2(&hex[2..3].repeat(2))?;
+            (r, g, b, 255)
+        }
+        4 => {
+            let r = parse_hex2(&hex[0..1].repeat(2))?;
+            let g = parse_hex2(&hex[1..2].repeat(2))?;
+            let b = parse_hex2(&hex[2..3].repeat(2))?;
+            let a = parse_hex2(&hex[3..4].repeat(2))?;
+            (r, g, b, a)
+        }
+        6 => {
+            let r = parse_hex2(&hex[0..2])?;
+            let g = parse_hex2(&hex[2..4])?;
+            let b = parse_hex2(&hex[4..6])?;
+            (r, g, b, 255)
+        }
+        8 => {
+            let r = parse_hex2(&hex[0..2])?;
+            let g = parse_hex2(&hex[2..4])?;
+            let b = parse_hex2(&hex[4..6])?;
+            let a = parse_hex2(&hex[6..8])?;
+            (r, g, b, a)
+        }
+        _ => return Err("Invalid color string; use #RGB, #RGBA, #RRGGBB, or #RRGGBBAA".to_string()),
+    };
+    Ok([
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        a as f32 / 255.0,
+    ])
+}
+
+fn named_color(name: &str) -> Option<[f32; 4]> {
+    let c = |r: u8, g: u8, b: u8| [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0];
+    match name {
+        "red" => Some(c(255, 0, 0)),
+        "green" => Some(c(0, 128, 0)),
+        "blue" => Some(c(0, 0, 255)),
+        "white" => Some(c(255, 255, 255)),
+        "black" => Some(c(0, 0, 0)),
+        "yellow" => Some(c(255, 255, 0)),
+        "magenta" => Some(c(255, 0, 255)),
+        "cyan" => Some(c(0, 255, 255)),
+        "orange" => Some(c(255, 165, 0)),
+        "purple" => Some(c(128, 0, 128)),
+        "pink" => Some(c(255, 192, 203)),
+        "gray" | "grey" => Some(c(128, 128, 128)),
+        _ => None,
+    }
+}
+
 /// Register all scene intrinsics in an environment
 pub fn register_scene_intrinsics() -> HashMap<String, NativeFn> {
     let mut intrinsics = HashMap::new();
@@ -991,8 +1194,111 @@ pub fn register_scene_intrinsics() -> HashMap<String, NativeFn> {
     // Utility functions
     intrinsics.insert("matrix-multiply".to_string(), intrinsic_matrix_multiply());
     intrinsics.insert("raycast".to_string(), intrinsic_raycast());
+    intrinsics.insert("set-color".to_string(), intrinsic_set_color());
+    intrinsics.insert("set-material".to_string(), intrinsic_set_material());
     
     intrinsics
+}
+
+/// Set material on an object from a map
+/// Example map:
+///   {"type":"basic", "color":"#ff8844", "animated": false}
+///   {"type":"standard", "base_color":[1 0.5 0 1], "metallic":0.2, "roughness":0.8, "emissive":[0 0 0]}
+pub fn intrinsic_set_material() -> NativeFn {
+    Rc::new(|args| {
+        if args.len() != 2 { return Err("set-material expects (object-id, map)".to_string()); }
+
+        let id = match &args[0] { Value::Object(id) => *id, _ => return Err("First argument must be an object ID".to_string()) };
+        let mat_val = &args[1];
+
+        let mut to_basic = || Material::default_animated_basic();
+        let mut parse_bool = |v: &Value| match v {
+            Value::Bool(b) => Ok(*b),
+            Value::Str(s) if s.eq_ignore_ascii_case("true") => Ok(true),
+            Value::Str(s) if s.eq_ignore_ascii_case("false") => Ok(false),
+            _ => Err("Expected boolean".to_string()),
+        };
+
+        let material = match mat_val {
+            Value::Map(m) => {
+                // Helper to get value by key from map supporting both keywords and strings
+                let get = |k: &str| m.get(k).or_else(|| m.get(&k.to_string()));
+                // Type
+                let typ = get("type");
+                let tstr = match typ { Some(Value::Str(s)) => s.as_str(), Some(Value::Symbol(sym)) => sym.0.as_str(), _ => "basic" };
+                match tstr.to_ascii_lowercase().as_str() {
+                    "basic" => {
+                        let mut mat = Material::default_animated_basic();
+                        if let Some(color_v) = get("color") { mat.set_color(parse_color_value(color_v)?); }
+                        if let Some(anim_v) = get("animated") { if let Material::Basic { animated, .. } = &mut mat { *animated = parse_bool(anim_v)?; } }
+                        mat
+                    }
+                    "standard" => {
+                        let base_color = if let Some(v) = get("base_color") { parse_color_value(v)? } else { [1.0,1.0,1.0,1.0] };
+                        let metallic = if let Some(v) = get("metallic") { number_to_f32(v)? } else { 0.0 };
+                        let roughness = if let Some(v) = get("roughness") { number_to_f32(v)? } else { 0.5 };
+                        let emissive = if let Some(v) = get("emissive") { parse_vec3_value(v)? } else { [0.0,0.0,0.0] };
+                        Material::Standard { base_color, metallic, roughness, emissive }
+                    }
+                    "lambert" => {
+                        let color = if let Some(v) = get("color") { parse_color_value(v)? } else { [1.0,1.0,1.0,1.0] };
+                        Material::Lambert { color }
+                    }
+                    "phong" => {
+                        let color = if let Some(v) = get("color") { parse_color_value(v)? } else { [1.0,1.0,1.0,1.0] };
+                        let shininess = if let Some(v) = get("shininess") { number_to_f32(v)? } else { 30.0 };
+                        let specular = if let Some(v) = get("specular") { parse_vec3_value(v)? } else { [1.0,1.0,1.0] };
+                        Material::Phong { color, shininess, specular }
+                    }
+                    "toon" => {
+                        let color = if let Some(v) = get("color") { parse_color_value(v)? } else { [1.0,1.0,1.0,1.0] };
+                        let levels = if let Some(v) = get("levels") { number_to_u32(v)? } else { 4 };
+                        Material::Toon { color, levels }
+                    }
+                    "normal" => Material::Normal,
+                    _ => to_basic(),
+                }
+            }
+            _ => to_basic(),
+        };
+
+        SCENE.with(|scene| {
+            let mut scene = scene.borrow_mut();
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                node.material = material;
+                Ok(Value::Nil)
+            } else {
+                Err(format!("Object {:?} not found", id))
+            }
+        })
+    })
+}
+
+fn number_to_f32(v: &Value) -> Result<f32, String> {
+    match v {
+        Value::Float(f) => Ok(*f as f32),
+        Value::Int(i) => Ok(*i as f32),
+        _ => Err("Expected number".to_string()),
+    }
+}
+
+fn number_to_u32(v: &Value) -> Result<u32, String> {
+    match v {
+        Value::Int(i) if *i >= 0 => Ok(*i as u32),
+        Value::Float(f) if *f >= 0.0 => Ok(*f as u32),
+        _ => Err("Expected non-negative number".to_string()),
+    }
+}
+
+fn parse_vec3_value(v: &Value) -> Result<[f32; 3], String> {
+    match v {
+        Value::Vector(items) if items.len() == 3 => Ok([
+            number_to_f32(&items[0])?,
+            number_to_f32(&items[1])?,
+            number_to_f32(&items[2])?,
+        ]),
+        _ => Err("Expected 3-element vector".to_string()),
+    }
 }
 
 #[cfg(test)]

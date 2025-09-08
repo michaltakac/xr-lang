@@ -6,7 +6,7 @@
 //! - Branching and merging of timelines
 //! - Prevention of "image drift" issues from Smalltalk
 
-use crate::value::Value;
+use crate::value::{Value, ObjectId};
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -472,10 +472,9 @@ pub struct ImagePersistence {
 pub struct SerializableJournalEntry {
     pub timestamp: u64,
     pub author: Author,
-    pub change_type: String,
-    pub change_data: Vec<u8>,
+    pub change: SerializableChange,
     pub provenance: Provenance,
-    pub metadata: HashMap<String, Vec<u8>>,
+    pub metadata: HashMap<String, SerValue>,
 }
 
 /// Serializable version of Snapshot
@@ -483,8 +482,34 @@ pub struct SerializableJournalEntry {
 pub struct SerializableSnapshot {
     pub id: SnapshotId,
     pub timestamp: u64,
-    pub state_data: Vec<u8>,
-    pub metadata: HashMap<String, Vec<u8>>,
+    pub state: HashMap<Vec<String>, SerValue>,
+    pub metadata: HashMap<String, SerValue>,
+}
+
+/// Serializable representation of Value (subset of types)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SerValue {
+    Nil,
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Str(String),
+    Symbol(String),
+    Keyword(String),
+    List(Vec<SerValue>),
+    Vector(Vec<SerValue>),
+    Map(HashMap<String, SerValue>),
+    ObjectId(u64),
+    Unknown(String),
+}
+
+/// Serializable representation of Change
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SerializableChange {
+    Create { path: Vec<String>, value: SerValue },
+    Update { path: Vec<String>, old: SerValue, new: SerValue },
+    Delete { path: Vec<String>, value: SerValue },
+    Move { from: Vec<String>, to: Vec<String>, value: SerValue },
 }
 
 impl PersistenceLayer {
@@ -549,7 +574,7 @@ impl PersistenceLayer {
                 })
                 .collect(),
         };
-        
+
         bincode::serialize(&image_persistence)
             .map_err(|e| format!("Failed to serialize persistence: {}", e))
     }
@@ -558,19 +583,19 @@ impl PersistenceLayer {
     pub fn import_snapshot(data: &[u8]) -> Result<Self, String> {
         let image_persistence: ImagePersistence = bincode::deserialize(data)
             .map_err(|e| format!("Failed to deserialize persistence: {}", e))?;
-        
+
         let mut persistence = PersistenceLayer::new();
-        
+
         // Restore journal entries
         persistence.journal.entries = image_persistence.journal_entries.iter()
             .map(|e| Self::serializable_to_journal_entry(e))
             .collect::<Result<Vec<_>, _>>()?;
-        
+
         // Restore snapshots
         persistence.snapshots.snapshots = image_persistence.snapshots.iter()
             .map(|s| Self::serializable_to_snapshot(s))
             .collect::<Result<Vec<_>, _>>()?;
-        
+
         // Restore branches
         persistence.journal.current_branch = image_persistence.current_branch;
         persistence.journal.branches = image_persistence.branches.iter()
@@ -581,60 +606,139 @@ impl PersistenceLayer {
                 Ok((id.clone(), entries))
             })
             .collect::<Result<HashMap<_, _>, String>>()?;
-        
+
         // Rebuild current state from journal
         persistence.current_state = persistence.journal.replay_to(u64::MAX);
-        
+
         Ok(persistence)
     }
     
     fn journal_entry_to_serializable(&self, entry: &JournalEntry) -> SerializableJournalEntry {
+        let change = match &entry.change {
+            Change::Create { path, value } => SerializableChange::Create {
+                path: path.0.clone(),
+                value: Self::value_to_ser(value),
+            },
+            Change::Update { path, old, new } => SerializableChange::Update {
+                path: path.0.clone(),
+                old: Self::value_to_ser(old),
+                new: Self::value_to_ser(new),
+            },
+            Change::Delete { path, value } => SerializableChange::Delete {
+                path: path.0.clone(),
+                value: Self::value_to_ser(value),
+            },
+            Change::Move { from, to, value } => SerializableChange::Move {
+                from: from.0.clone(),
+                to: to.0.clone(),
+                value: Self::value_to_ser(value),
+            },
+        };
+
         SerializableJournalEntry {
             timestamp: entry.timestamp,
             author: entry.author.clone(),
-            change_type: format!("{:?}", entry.change),
-            change_data: format!("{:?}", entry.change).into_bytes(),  // Simple serialization
+            change,
             provenance: entry.provenance.clone(),
             metadata: entry.metadata.iter()
-                .map(|(k, v)| (k.clone(), format!("{:?}", v).into_bytes()))
+                .map(|(k, v)| (k.clone(), Self::value_to_ser(v)))
                 .collect(),
         }
     }
-    
+
     fn serializable_to_journal_entry(entry: &SerializableJournalEntry) -> Result<JournalEntry, String> {
-        // For now, create a placeholder change - proper deserialization would be implemented
-        let change = Change::Create {
-            path: ValuePath::root(),
-            value: Value::Nil,
+        let change = match &entry.change {
+            SerializableChange::Create { path, value } => Change::Create {
+                path: ValuePath(path.clone()),
+                value: Self::ser_to_value(value),
+            },
+            SerializableChange::Update { path, old, new } => Change::Update {
+                path: ValuePath(path.clone()),
+                old: Self::ser_to_value(old),
+                new: Self::ser_to_value(new),
+            },
+            SerializableChange::Delete { path, value } => Change::Delete {
+                path: ValuePath(path.clone()),
+                value: Self::ser_to_value(value),
+            },
+            SerializableChange::Move { from, to, value } => Change::Move {
+                from: ValuePath(from.clone()),
+                to: ValuePath(to.clone()),
+                value: Self::ser_to_value(value),
+            },
         };
-        
+
         Ok(JournalEntry {
             timestamp: entry.timestamp,
             author: entry.author.clone(),
             change,
             provenance: entry.provenance.clone(),
-            metadata: HashMap::new(),  // Simplified for now
+            metadata: entry.metadata.iter().map(|(k, v)| (k.clone(), Self::ser_to_value(v))).collect(),
         })
     }
-    
+
     fn snapshot_to_serializable(&self, snapshot: &Snapshot) -> SerializableSnapshot {
+        let mut state_map: HashMap<Vec<String>, SerValue> = HashMap::new();
+        for (path, val) in &snapshot.state {
+            state_map.insert(path.0.clone(), Self::value_to_ser(val));
+        }
+
         SerializableSnapshot {
             id: snapshot.id.clone(),
             timestamp: snapshot.timestamp,
-            state_data: format!("{:?}", snapshot.state).into_bytes(),  // Simple serialization
+            state: state_map,
             metadata: snapshot.metadata.iter()
-                .map(|(k, v)| (k.clone(), format!("{:?}", v).into_bytes()))
+                .map(|(k, v)| (k.clone(), Self::value_to_ser(v)))
                 .collect(),
         }
     }
-    
+
     fn serializable_to_snapshot(snapshot: &SerializableSnapshot) -> Result<Snapshot, String> {
+        let mut state: HashMap<ValuePath, Value> = HashMap::new();
+        for (path, val) in &snapshot.state {
+            state.insert(ValuePath(path.clone()), Self::ser_to_value(val));
+        }
+
         Ok(Snapshot {
             id: snapshot.id.clone(),
             timestamp: snapshot.timestamp,
-            state: HashMap::new(),  // Simplified for now
-            metadata: HashMap::new(),  // Simplified for now
+            state,
+            metadata: snapshot.metadata.iter().map(|(k, v)| (k.clone(), Self::ser_to_value(v))).collect(),
         })
+    }
+
+    fn value_to_ser(v: &Value) -> SerValue {
+        match v {
+            Value::Nil => SerValue::Nil,
+            Value::Bool(b) => SerValue::Bool(*b),
+            Value::Int(i) => SerValue::Int(*i),
+            Value::Float(f) => SerValue::Float(*f),
+            Value::Str(s) => SerValue::Str(s.clone()),
+            Value::Symbol(sym) => SerValue::Symbol(sym.0.clone()),
+            Value::Keyword(kw) => SerValue::Keyword(kw.0.clone()),
+            Value::List(xs) => SerValue::List(xs.iter().map(Self::value_to_ser).collect()),
+            Value::Vector(xs) => SerValue::Vector(xs.iter().map(Self::value_to_ser).collect()),
+            Value::Map(m) => SerValue::Map(m.iter().map(|(k, v)| (k.clone(), Self::value_to_ser(v))).collect()),
+            Value::Object(ObjectId(id)) => SerValue::ObjectId(*id),
+            other => SerValue::Unknown(format!("{:?}", other)),
+        }
+    }
+
+    fn ser_to_value(v: &SerValue) -> Value {
+        match v {
+            SerValue::Nil => Value::Nil,
+            SerValue::Bool(b) => Value::Bool(*b),
+            SerValue::Int(i) => Value::Int(*i),
+            SerValue::Float(f) => Value::Float(*f),
+            SerValue::Str(s) => Value::Str(s.clone()),
+            SerValue::Symbol(s) => Value::symbol(s),
+            SerValue::Keyword(k) => Value::keyword(k),
+            SerValue::List(xs) => Value::List(xs.iter().map(Self::ser_to_value).collect()),
+            SerValue::Vector(xs) => Value::Vector(xs.iter().map(Self::ser_to_value).collect()),
+            SerValue::Map(m) => Value::Map(m.iter().map(|(k, v)| (k.clone(), Self::ser_to_value(v))).collect()),
+            SerValue::ObjectId(id) => Value::Object(ObjectId(*id)),
+            SerValue::Unknown(_) => Value::Nil,
+        }
     }
 }
 

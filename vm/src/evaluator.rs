@@ -6,7 +6,6 @@
 
 use crate::value::{Value, Symbol, Environment, Closure};
 use crate::macro_system::MacroExpander;
-use crate::intrinsics_camera;
 use std::rc::Rc;
 use std::collections::HashMap;
 
@@ -25,6 +24,8 @@ impl Evaluator {
             on_redefinition_callback: None,
         };
         evaluator.init_primitives();
+        // Wire up scene-related XR-Lang macros (lightweight wrappers)
+        crate::macro_system::init_scene_macros(&mut evaluator.macro_expander);
         evaluator
     }
     
