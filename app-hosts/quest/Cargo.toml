@@ -13,6 +13,7 @@ anyhow.workspace = true
 thiserror.workspace = true
 bytemuck.workspace = true
 log.workspace = true
+glam = "0.24"
 dsl = { path = "../../dsl" }
 ir = { path = "../../ir" }
 jit = { path = "../../jit" }
@@ -25,17 +26,70 @@ cv = { path = "../../cv" }
 # Android-specific dependencies (only compiled on target_os = "android")
 [target.'cfg(target_os = "android")'.dependencies]
 ndk.workspace = true
+ndk-glue = "0.7"
 openxr.workspace = true
 wgpu = { workspace = true }
 winit = { workspace = true, features = ["android-native-activity"] }
 android_logger = "0.13"
+pollster = "0.3"
+chrono = "0.4"
+ash = "0.38"
+raw-window-handle = "0.6"
 
 [package.metadata.android]
 package = "com.example.xrdsl"
 apk_name = "xrdsl"
-assets = ["../../examples"]
-target_sdk_version = 33
-min_sdk_version = 26
+assets = "../../examples"
+target_sdk_version = 32
+min_sdk_version = 29
+opengles_version = [3, 2]
+# Force the app to have code
+build_targets = ["aarch64-linux-android"]
+
+# VR mode configuration - CRITICAL FOR QUEST
+[[package.metadata.android.uses_feature]]
+name = "android.hardware.vr.headtracking"
+required = true
+version = 1
+
+[[package.metadata.android.uses_feature]]
+name = "oculus.software.handtracking"
+required = false
+
+# Quest VR mode metadata
+[[package.metadata.android.application.meta_data]]
+name = "com.oculus.vr.focusaware"
+value = "true"
+
+[[package.metadata.android.application.meta_data]]
+name = "com.samsung.android.vr.application.mode"
+value = "vr_only"
+
+# Activity-specific VR configuration
+[[package.metadata.android.application.activity.meta_data]]
+name = "com.oculus.vr.focusaware"
+value = "true"
+
+[[package.metadata.android.application.activity.meta_data]]
+name = "com.oculus.intent.category.VR"
+value = "vr_only"
+
+# Main VR intent filter
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["com.oculus.intent.category.VR", "android.intent.category.LAUNCHER"]
+
+# Additional intent filter for Quest Store
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.LEANBACK_LAUNCHER"]
+
+# OpenXR permissions (REQUIRED)
+[[package.metadata.android.uses_permission]]
+name = "org.khronos.openxr.permission.OPENXR"
+
+[[package.metadata.android.uses_permission]]
+name = "org.khronos.openxr.permission.OPENXR_SYSTEM"
 
 [[package.metadata.android.uses_permission]]
 name = "android.permission.INTERNET"
